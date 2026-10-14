@@ -404,11 +404,11 @@ td.name{white-space:normal;min-width:140px;max-width:260px;line-height:1.3}
 
 <script>
 (async function(){
-let DATA, HISTORIAL, FECHA_CORTE, HORA_CORTE;
+let DATA, HISTORIAL, FECHA_CORTE, HORA_CORTE, CERTIF;
 try {
   const resp = await fetch('datos.json', {cache: 'no-store'});
   const j = await resp.json();
-  DATA = j.data; HISTORIAL = j.historial; FECHA_CORTE = j.fecha_corte; HORA_CORTE = j.hora_corte;
+  DATA = j.data; HISTORIAL = j.historial; FECHA_CORTE = j.fecha_corte; HORA_CORTE = j.hora_corte; CERTIF = j.certificados || null;
 } catch (e) {
   document.body.innerHTML = '<div style="padding:60px 24px;font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;color:#16324F">' +
     '<h2>No se pudieron cargar los datos</h2>' +
@@ -435,8 +435,12 @@ const FILTERS = [
   {k:'pr', label:'Programa presupuestal'},
   {k:'ti', label:'Tipo de gasto'},
   {k:'re', label:'Tipo de partida'},
-  {k:'se', label:'Sectorista'}
+  {k:'se', label:'Sectorista'},
+  {k:'c2', label:'Concepto'}
 ];
+/* código de la genérica de gasto, solo para mostrar en el filtro */
+const GE_COD = {'Personal y obligaciones sociales':'2.1', 'Bienes y servicios':'2.3', 'Donaciones y transferencias':'2.4', 'Otros gastos':'2.5', 'Adquisición de activos no financieros':'2.6'};
+const fLabel = (k, v) => k === 'ge' && GE_COD[v] ? GE_COD[v] + ' ' + v : v;
 const GROUPS = {uo:'Unidad orgánica', og:'Órgano', ge:'Genérica de gasto', fu:'Fuente de financiamiento', pr:'Programa presupuestal', ti:'Actividades / Inversiones', ca:'Categoría de gasto', oe:'Objetivo estratégico (OEI)', c2:'Concepto de gasto', cl:'Clasificador'};
 
 /* ===== Preparación de datos ===== */
@@ -449,7 +453,7 @@ const FRAC = Math.min(1, FD / new Date(FY, LAST+1, 0).getDate());   /* fracción
 const MONTHS_LEFT = (1 - FRAC) + (11 - LAST);
 function fnv(s){ let h = 0x811c9dc5; for (const b of new TextEncoder().encode(s)){ h ^= b; h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8,'0'); }
 DATA.forEach(r => { r.h = fnv([r.og,r.uo,r.ge,r.fu,r.pr,r.ti,r.ca,r.re,r.oe,r.c2,r.cl].join('|')); });
-window.__TABLERO__ = {DATA, HISTORIAL, FECHA_CORTE, HORA_CORTE, LAST, M3, MONTHS_LEFT};   /* lo usa el asistente del tablero */
+window.__TABLERO__ = {DATA, HISTORIAL, FECHA_CORTE, HORA_CORTE, LAST, M3, MONTHS_LEFT, CERTIF};   /* lo usa el asistente del tablero */
 window.dispatchEvent(new Event('tablero:listo'));
 
 const state = { f:{}, measure:'pim', groupBy:'uo', invGroup:'c2', base:null, tblGroup:'uo', sort:{key:'pim', dir:-1}, q:'' };
@@ -564,13 +568,13 @@ function renderFilters(skipKey){
     const w = filtersEl.querySelector('.ms[data-k="'+f.k+'"]');
     const sel = state.f[f.k];
     const btn = w.querySelector('.ms-btn');
-    w.querySelector('.ms-val').textContent = sel.size === 0 ? 'Todos' : sel.size === 1 ? [...sel][0] : sel.size + ' seleccionados';
+    w.querySelector('.ms-val').textContent = sel.size === 0 ? 'Todos' : sel.size === 1 ? fLabel(f.k, [...sel][0]) : sel.size + ' seleccionados';
     btn.classList.toggle('active', sel.size > 0);
     if (f.k === skipKey) return;
     const list = w.querySelector('.ms-list');
     const opts = optionList(f.k);
     list.innerHTML = opts.length ? opts.map(([v,a]) =>
-      '<label class="ms-opt" data-t="'+esc(v)+'"><input type="checkbox" value="'+esc(v)+'"'+(sel.has(v)?' checked':'')+'><span class="t" title="'+esc(v)+'">'+esc(v)+'</span><span class="a">'+shortM(a)+'</span></label>'
+      '<label class="ms-opt" data-t="'+esc(fLabel(f.k, v))+'"><input type="checkbox" value="'+esc(v)+'"'+(sel.has(v)?' checked':'')+'><span class="t" title="'+esc(fLabel(f.k, v))+'">'+esc(fLabel(f.k, v))+'</span><span class="a">'+shortM(a)+'</span></label>'
     ).join('') : '<div class="ms-none">Sin opciones</div>';
     applySearch(w);
   });
@@ -1451,7 +1455,7 @@ function renderInversiones(rows, t){
 
 /* ===== Resumen ejecutivo (PDF por impresión) ===== */
 function filtrosTexto(){
-  const a = FILTERS.filter(f => state.f[f.k].size).map(f => f.label + ': ' + [...state.f[f.k]].join(', '));
+  const a = FILTERS.filter(f => state.f[f.k].size).map(f => f.label + ': ' + [...state.f[f.k]].map(v => fLabel(f.k, v)).join(', '));
   return a.length ? trunc('Filtros aplicados · ' + a.join(' | '), 230) : 'Sin filtros: presupuesto total';
 }
 function chartImg(id, w, h){
@@ -2585,13 +2589,26 @@ update();
 .atb-hola-r svg{width:52px;height:52px;display:block}
 .atb-hola b{font-size:15px}
 .atb-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.atb-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:#fff;border:1px solid var(--line,#E2E8F0);border-radius:12px;padding:9px 10px;cursor:pointer;font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s,transform .15s}
+.atb-card{display:grid;grid-template-columns:28px 1fr;grid-template-rows:auto auto;column-gap:8px;row-gap:1px;align-items:center;text-align:left;background:#fff;border:1px solid var(--line,#E2E8F0);border-radius:12px;padding:9px 10px;cursor:pointer;font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s,transform .15s}
 .atb-card:hover{border-color:var(--teal,#12A08A);box-shadow:0 4px 14px rgba(18,160,138,.14);transform:translateY(-1px)}
 .atb-card:focus-visible{outline:2px solid var(--teal,#12A08A);outline-offset:2px}
-.atb-card .ci{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.atb-card .ci{grid-row:1/3;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center}
 .atb-card .ci svg{width:16px;height:16px}
-.atb-card b{font-size:13.5px;line-height:1.25}
-.atb-card small{font-size:11.5px;color:var(--muted,#5A6B82);line-height:1.3}
+.atb-card b{font-size:13px;line-height:1.2}
+.atb-card small{font-size:11px;color:var(--muted,#5A6B82);line-height:1.25}
+.ci.c7{background:#E8F1EC;color:#2F7A52}.ci.c8{background:#FBE7E6;color:#B23A36}
+.atb-alerta{background:#FFF8EC;border:1px solid #F4D9A6;border-radius:12px;padding:9px 11px}
+.atb-alerta>b{display:flex;align-items:center;gap:6px;font-size:13px;color:#8A5A0B;margin-bottom:5px}
+.atb-alerta button{all:unset;cursor:pointer;color:#0B7A68;font-size:12px;font-weight:600;margin-top:4px}
+.atb-pzs{display:flex;flex-direction:column;gap:6px}
+.atb-pz{display:grid;grid-template-columns:auto 1fr;column-gap:8px;row-gap:1px;padding:7px 9px;border-radius:9px;background:var(--bg,#F2F5F9);border-left:4px solid #12A08A;font-size:12.5px;line-height:1.35}
+.atb-pz.a{border-left-color:#F2A93B}.atb-pz.r{border-left-color:#D9534F;background:#FDF0EF}.atb-pz.g{border-left-color:#CBD5E1;opacity:.7}
+.atb-pz-d{font-weight:700;text-align:right}.atb-pz.r .atb-pz-d{color:#B23A36}.atb-pz.a .atb-pz-d{color:#A86A0C}.atb-pz.v .atb-pz-d{color:#0B7A68}
+.atb-pz-t{grid-column:1/3;color:var(--ink,#142238)}
+.atb-alerta .atb-pz{background:#fff}
+.atb-glosa{background:var(--bg,#F2F5F9);border-radius:8px;padding:7px 9px;font-size:12.5px;line-height:1.4}
+.atb-badge{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#D9534F;color:#fff;font:700 11.5px/20px var(--font,system-ui,sans-serif);text-align:center;box-shadow:0 0 0 2px #fff}
+.atb-toggle.abierto .atb-badge{display:none}
 .ci.c1{background:#E3EAF3;color:#16324F}.ci.c2{background:#FBE7E6;color:#B23A36}.ci.c3{background:#E3F5F1;color:#0B7A68}.ci.c4{background:#ECEAFA;color:#5C51B4}.ci.c5{background:#E4EEFB;color:#2D63AE}.ci.c6{background:#FDF1DE;color:#A86A0C}
 .atb-form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line,#E2E8F0);background:#fff}
 .atb-in{flex:1;min-width:0;border:1px solid var(--line,#E2E8F0);border-radius:12px;padding:10px 12px;font:inherit;outline:none;background:var(--bg,#F2F5F9)}
@@ -2612,7 +2629,8 @@ update();
 @media print{.atb-toggle,.atb-panel,.atb-teaser{display:none !important}}
 </style>
 <script>
-function crearAsistente(T){
+function crearAsistente(T, OPT){
+  OPT = OPT || {};
   'use strict';
   const D = T.DATA, H = T.HISTORIAL || [], LAST = T.LAST, M3 = T.M3, ML = T.MONTHS_LEFT;
   const BOLSA = new Set(['OPP (Otros)']);
@@ -2769,7 +2787,7 @@ function crearAsistente(T){
 
   /* ---------- guía de uso y glosario ---------- */
   const GUIA = [
-    {t: 'Filtros', k: /\bfiltr|\blimpiar\b|\bseleccion/, r: 'Los <b>filtros</b> están en la parte superior: órgano, unidad orgánica, sectorista, genérica, fuente, programa, tipo de gasto y tipo de partida. Puedes elegir varios valores a la vez; todo el tablero se recalcula. El botón <b>Limpiar filtros</b> los quita.'},
+    {t: 'Filtros', k: /\bfiltr|\blimpiar\b|\bseleccion/, r: 'Los <b>filtros</b> están en la parte superior: órgano, unidad orgánica, genérica (con su código, ej. 2.3), fuente, programa, tipo de gasto, tipo de partida, sectorista y concepto. Puedes elegir varios valores a la vez; todo el tablero se recalcula. El botón <b>Limpiar filtros</b> los quita.'},
     {t: 'Reporte de sectoristas', k: /\bsectorist.*\b(pdf|reporte|hoja)|\b(pdf|reporte).*sectorist/, r: 'Pulsa <b>Reporte de sectoristas (PDF)</b>: genera una hoja por sectorista con sus unidades, avance acumulado y mensual, saldo en riesgo y alertas. En la ventana de impresión elige <b>Guardar como PDF</b>.'},
     {t: 'Resumen ejecutivo (PDF)', k: /\bresumen ejecutivo\b|\bpdf\b(?!.*sectorist)|\bimprimir\b/, r: 'Pulsa <b>Resumen ejecutivo (PDF)</b>. Se abre la ventana de impresión: en destino elige <b>Guardar como PDF</b>. Usa los filtros que tengas aplicados.'},
     {t: 'Presentación PPT', k: /\bppt\b|\bpowerpoint\b|\bpresentacion\b|\bdiapositiva/, r: 'Pulsa <b>Descargar PPT</b>: arma una presentación ejecutiva de 10 diapositivas con los datos del corte. Necesita conexión a internet y tarda unos segundos.'},
@@ -3021,6 +3039,106 @@ function crearAsistente(T){
       (g.length > 1 ? 'En total: PIM ' + fML(t.pim) + ', devengado ' + fML(t.dv) + ' (' + pct(t.dv, t.pim) + '). ' : '') + '¿Era esto lo que buscabas?', chips: g.slice(0, 2).map(x => 'Evolución mensual de ' + x.k)};
   }
 
+  /* ---------- plazos de la fase de ejecución (Cuadro de plazos AF 2026, MEF) ---------- */
+  const PLAZOS = (function(){
+    const L = [];
+    const add = (f, t, ini, cat) => L.push({f: f, t: t, ini: ini || null, cat: cat || 'Pliego'});
+    const MESN_ = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'];
+    ['2026-04-10','2026-07-10','2026-10-12'].forEach(f => add(f, 'Aprobación de la revisión de la PCA de oficio (R.D.)', null, 'MEF'));
+    add('2025-12-31', 'Aprobación del Presupuesto Institucional de Apertura (PIA)');
+    add('2026-01-05', 'Presentación de la copia de la resolución que aprueba el PIA');
+    add('2026-01-22', 'Presentación del Modelo N° 8/GN (crédito externo, donaciones y contrapartida)');
+    [['2026-01-01','2026-03-31','I'],['2026-04-01','2026-06-30','II'],['2026-07-01','2026-09-30','III'],['2026-10-01','2026-12-31','IV']].forEach(p => add(p[1], 'Actualización de la PCA durante el ' + p[2] + ' trimestre', p[0]));
+    ['2026-02-10','2026-03-10','2026-04-10','2026-05-08','2026-06-10','2026-07-10','2026-08-10','2026-09-10','2026-10-09','2026-11-10','2026-12-10','2027-01-08'].forEach((f, i) => add(f, 'Aprobación de modificaciones presupuestarias en el nivel funcional programático (mes ' + String(i + 1).padStart(2, '0') + ', ' + MESN_[i] + ')'));
+    ['2026-02-13','2026-03-13','2026-04-15','2026-05-15','2026-06-15','2026-07-15','2026-08-14','2026-09-15','2026-10-15','2026-11-13','2026-12-15','2027-01-15'].forEach((f, i) => add(f, 'Presentación de copias de resoluciones de modificaciones en el nivel funcional programático (mes ' + String(i + 1).padStart(2, '0') + ', ' + MESN_[i] + ')'));
+    add('2026-10-30', 'Solicitud de opinión favorable de la DGPP para transferencias al CAFAE');
+    [['2026-03-20','II trimestre 2026'],['2026-06-19','III trimestre 2026'],['2026-09-18','IV trimestre 2026'],['2026-12-18','I trimestre 2027']].forEach(p => add(p[0], 'Registro del Formato N° 19 "Proyección de ejecución de inversiones" (' + p[1] + ')'));
+    [['2026-02-03',1],['2026-03-03',2],['2026-04-06',3],['2026-05-05',4],['2026-06-03',5],['2026-07-02',6],['2026-08-04',7],['2026-09-03',8],['2026-10-02',9],['2026-11-03',10],['2026-12-02',11]].forEach(p => add(p[0], 'Registro del Formato N° 28 "Proyección de ejecución mensual en gasto corriente" (' + MESN_[p[1]] + ')'));
+    [['2026-03-01','2026-03-31','I'],['2026-06-01','2026-06-30','II'],['2026-09-01','2026-09-30','III'],['2026-11-01','2026-11-20','IV']].forEach(p => add(p[1], 'Solicitudes de modificación del límite de incorporación de mayores ingresos (' + p[2] + ' trimestre)', p[0]));
+    [['2026-04-01','2026-04-16','I'],['2026-07-01','2026-07-14','II'],['2026-10-01','2026-10-14','III'],['2027-01-04','2027-01-15','IV']].forEach(p => add(p[1], 'Registro y emisión de previsiones presupuestarias, Formato 05 sin inversiones y de inversiones (' + p[2] + ' trimestre)', p[0]));
+    return L.sort((a, b) => a.f < b.f ? -1 : a.f > b.f ? 1 : 0);
+  })();
+  const hoyISO = () => { const d = T.HOY ? new Date(T.HOY + 'T12:00:00') : new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const dias = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
+  const fTxt = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+  function proximosPlazos(n){
+    const h = hoyISO();
+    return PLAZOS.filter(p => p.f >= h && dias(h, p.f) <= n).map(p => Object.assign({d: dias(h, p.f), curso: !!(p.ini && p.ini <= h)}, p));
+  }
+  const cuando = d => d === 0 ? 'vence hoy' : d === 1 ? 'vence mañana' : 'vence en ' + d + ' días';
+  const tonoD = d => d <= 2 ? 'r' : d <= 7 ? 'a' : 'v';
+  const filaPlazo = p => '<div class="atb-pz ' + tonoD(p.d) + '"><b>' + fTxt(p.f) + '</b><span class="atb-pz-d">' + cuando(p.d) + '</span><span class="atb-pz-t">' + esc(p.t) + (p.ini ? ' <small>(desde el ' + fTxt(p.ini) + ')</small>' : '') + (p.cat === 'MEF' ? ' <small>· a cargo del MEF</small>' : '') + '</span></div>';
+  function rPlazos(n){
+    const h = hoyISO();
+    const m = mesesDe(n).filter(x => x <= 11);
+    let lst, tt;
+    if (m.length){
+      const anio = h.slice(0, 4);
+      lst = PLAZOS.filter(p => m.includes(+p.f.slice(5, 7) - 1) && (p.f.slice(0, 4) === anio)).map(p => Object.assign({d: dias(h, p.f)}, p));
+      tt = 'Plazos de ' + m.map(x => MESN[x]).join(' y ');
+    } else {
+      lst = proximosPlazos(30); tt = 'Plazos de los próximos 30 días';
+    }
+    if (!lst.length) return {html: titulo('📅', tt) + '<p>No hay plazos registrados en ese periodo.</p>' + pie('¿Quieres ver los próximos plazos?'), chips: ['Plazos por vencer']};
+    const filas = lst.map(p => p.d < 0 ? '<div class="atb-pz g"><b>' + fTxt(p.f) + '</b><span class="atb-pz-d">venció</span><span class="atb-pz-t">' + esc(p.t) + '</span></div>' : filaPlazo(p)).join('');
+    return {html: titulo('⏰', tt + ' <span>hoy ' + fTxt(h) + '</span>') + '<div class="atb-pzs">' + filas + '</div>' +
+      nota('Fuente: Cuadro de plazos de la fase de ejecución presupuestaria AF 2026 (MEF). Las copias de resoluciones de modificaciones a nivel institucional se presentan dentro de los 5 días calendario de aprobadas.') +
+      pie('¿Quieres ver los plazos de otro mes?'), chips: ['Plazos de noviembre', 'Plazos de diciembre']};
+  }
+
+  /* ---------- certificaciones (CCP) ---------- */
+  let CCP = null, cargandoCCP = null;
+  function conCCP(fn){
+    if (CCP) return fn();
+    if (!OPT.cargarCCP) return {html: 'La información de certificaciones no está disponible en este momento.', chips: SUGERENCIAS};
+    if (!cargandoCCP) cargandoCCP = Promise.resolve(OPT.cargarCCP()).then(j => { CCP = j; }).catch(e => { cargandoCCP = null; throw e; });
+    return cargandoCCP.then(fn).catch(() => ({html: 'No pude cargar el archivo de certificaciones 😕. Intenta de nuevo en un momento.', chips: SUGERENCIAS}));
+  }
+  const fS = (v, mon) => (mon || 'S/') + ' ' + v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const corta = (s, n) => s.length > n ? s.slice(0, n - 1).trim() + '…' : s;
+  function rCCP(num){
+    const c = CCP.ccp[num];
+    if (!c) return {html: 'No encontré la <b>CCP N° ' + esc(num) + '</b> en el reporte de certificaciones (corte ' + esc(CCP.corte) + ') 🤔. Verifica el número o busca por palabras de la glosa, por ejemplo <i>"CCP locadores DFS"</i>.', chips: ['CCP con mayor saldo por comprometer']};
+    const [ce, co, dv, gi, glosa, mon, comps] = c;
+    const m = mon ? mon + ' ' : 'S/ ';
+    const fmt = v => mon ? fS(v, mon) : fM(v);
+    const avc = ce ? dv / ce : 0;
+    const top = comps.slice().sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const lc = top.map(x => fila('Compromiso ' + x[0] + ' · ' + x[4] + ' exp.', fmt(x[1]), x[1] ? x[2] / x[1] : 0, 'v', 'devengado ' + fmt(x[2]) + (x[5] ? ' · ' + esc(corta(x[5], 90)) : ''))).join('');
+    return {html: titulo('🧾', 'CCP N° ' + esc(num) + ' <span>reporte SIAF al ' + esc(CCP.corte) + '</span>') +
+      '<p class="atb-glosa">' + esc(glosa) + '</p>' +
+      '<div class="atb-kpis">' + kpi('Certificado', fmt(ce)) + kpi('Comprometido', fmt(co)) + kpi('Devengado', fmt(dv), 'k-' + tono(avc)) + '</div>' + barra(avc, tono(avc)) +
+      '<div class="atb-dl"><span>Saldo por comprometer</span><b>' + fS(ce - co, m.trim()) + '</b><span>Saldo por devengar</span><b>' + fS(ce - dv, m.trim()) + '</b><span>Girado</span><b>' + fS(gi, m.trim()) + '</b><span>Compromisos</span><b>' + comps.length + '</b></div>' +
+      (comps.length ? '<p>' + (comps.length > 5 ? 'Los 5 compromisos de mayor monto:' : 'Compromisos:') + '</p><div class="atb-rows">' + lc + '</div>' : '<p>Esta CCP aún <b>no tiene compromisos</b> registrados.</p>') +
+      pie('¿Quieres consultar otra CCP?'), chips: ['CCP con mayor saldo por comprometer']};
+  }
+  function rCCPBuscar(n){
+    const STOPC = new Set(['ccp','ccps','certificado','certificados','certificacion','certificaciones','credito','presupuestario','presupuestaria','de','del','la','las','el','los','para','por','con','sobre','que','cual','cuales','hay','tiene','buscar','busca','dame','muestrame','numero','nro','informacion','datos','en','y','a','al','un','una']);
+    const pal = n.split(/[^a-z0-9]+/).filter(p => p.length >= 3 && !STOPC.has(p));
+    const L = [];
+    const saldo = /\bsaldo\b|\bsin comprometer\b|\bpor comprometer\b/.test(n) && !pal.filter(p => !['saldo','sin','comprometer','mayor','mayores'].includes(p)).length;
+    if (saldo){
+      for (const [k, c] of Object.entries(CCP.ccp)) if (!c[5] && c[0] - c[1] > 1) L.push([k, c]);
+      L.sort((a, b) => (b[1][0] - b[1][1]) - (a[1][0] - a[1][1]));
+      const tot = L.reduce((s, x) => s + x[1][0] - x[1][1], 0);
+      return {html: titulo('🧾', 'CCP con mayor saldo por comprometer <span>reporte SIAF al ' + esc(CCP.corte) + '</span>') +
+        '<div class="atb-rows">' + L.slice(0, 6).map(([k, c]) => fila('CCP ' + k, fM(c[0] - c[1]), (c[0] - c[1]) / Math.max(1, L[0][1][0] - L[0][1][1]), 'n', esc(corta(c[4], 80)))).join('') + '</div>' +
+        nota(L.length + ' CCP tienen saldo por comprometer, en total ' + fML(tot) + '.') + pie('¿Quieres ver el detalle de alguna?'), chips: L.slice(0, 3).map(x => 'CCP ' + x[0])};
+    }
+    if (!pal.length) return {html: '🧾 Puedo buscar una certificación por su número (ej. <i>"CCP 100"</i>) o por palabras de la glosa (ej. <i>"CCP locadores DFS"</i>). ¿Cuál necesitas?', chips: ['CCP con mayor saldo por comprometer']};
+    for (const [k, c] of Object.entries(CCP.ccp)){
+      const txt = norm(c[4] + ' ' + c[6].map(x => x[5]).join(' '));
+      if (pal.every(p => txt.includes(p))) L.push([k, c]);
+    }
+    if (!L.length) return {html: 'No encontré certificaciones con <b>' + esc(pal.join(' ')) + '</b> en la glosa 🤔. Prueba con menos palabras o con el número de CCP.', chips: ['CCP con mayor saldo por comprometer']};
+    L.sort((a, b) => b[1][0] - a[1][0]);
+    const tc = L.reduce((s, x) => s + (x[1][5] ? 0 : x[1][0]), 0), td = L.reduce((s, x) => s + (x[1][5] ? 0 : x[1][2]), 0);
+    return {html: titulo('🔎', L.length + ' CCP con "' + esc(pal.join(' ')) + '" <span>reporte SIAF al ' + esc(CCP.corte) + '</span>') +
+      '<div class="atb-rows">' + L.slice(0, 6).map(([k, c]) => fila('CCP ' + k, c[5] ? fS(c[0], c[5]) : fM(c[0]), c[0] ? c[2] / c[0] : 0, tono(c[0] ? c[2] / c[0] : 0), 'devengado ' + pct(c[2], c[0]) + ' · ' + esc(corta(c[4], 80)))).join('') + '</div>' +
+      nota((L.length > 6 ? 'Se muestran 6 de ' + L.length + ', las de mayor monto. ' : '') + 'En total: certificado ' + fML(tc) + ', devengado ' + fML(td) + ' (' + pct(td, tc) + ').') +
+      pie('Escribe el número para ver el detalle de una CCP.'), chips: L.slice(0, 3).map(x => 'CCP ' + x[0])};
+  }
+
   const SUGERENCIAS = ['Resumen del pliego', 'Unidades con menor avance', 'Proyección de cierre del pliego', '¿Cómo descargo el PPT?'];
 
   function responder(texto){
@@ -3032,7 +3150,12 @@ function crearAsistente(T){
     if (/^(gracias|muchas gracias|ok|listo|perfecto|genial|chevere|excelente)\b/.test(n) && n.split(' ').length <= 4)
       return {html: '¡Con gusto! 😊 ¿Te ayudo con algo más?', chips: SUGERENCIAS};
     if (/\b(quien eres|que eres|que puedes hacer|que sabes|que haces)\b/.test(n))
-      return {html: 'Soy el asistente del tablero 🤖. Respondo con los mismos datos del tablero (sin inteligencia artificial):' + lista(['Cifras: PIM, devengado, avance y saldo por unidad, órgano, sectorista, genérica, fuente, proyecto o CUI', 'Rankings, evolución mensual, comparación entre cortes y proyección de cierre', 'Cómo usar los filtros, descargas y secciones']) + '¿Por dónde empezamos?', chips: SUGERENCIAS};
+      return {html: 'Soy el asistente del tablero 🤖. Respondo con los mismos datos del tablero (sin inteligencia artificial):' + lista(['Cifras: PIM, devengado, avance y saldo por unidad, órgano, sectorista, genérica, fuente, proyecto o CUI', 'Rankings, evolución mensual, comparación entre cortes y proyección de cierre', 'Certificaciones (CCP) por número o por palabras de la glosa', 'Plazos de la fase de ejecución presupuestaria que están por vencer', 'Cómo usar los filtros, descargas y secciones']) + '¿Por dónde empezamos?', chips: SUGERENCIAS};
+
+    const mCCP = n.match(/\b(?:ccp|certificacion(?:es)?|certificado|cert)\s*(?:n|nro|numero|no)?[\s.°º#:-]*(\d{1,6})\b/);
+    if (mCCP && !/\b(millones|soles|s\/)\b/.test(n)) return conCCP(() => rCCP(String(+mCCP[1])));
+    if (/\bccps?\b|\bcertificaciones\b|\bcredito presupuestario\b/.test(n)) return conCCP(() => rCCPBuscar(n));
+    if (/\b(plazos?|vence|vencen|vencer|vencimientos?|fecha limite|fechas limite|calendario)\b/.test(n)) return rPlazos(n);
 
     const {ents, sinNombre} = detectar(orig);
     const meses = mesesDe(n);
@@ -3104,7 +3227,7 @@ function crearAsistente(T){
     }
     return {html: partes.join('<br><br>'), chips: chips && chips.length ? chips.slice(0, 3) : SUGERENCIAS.slice(0, 3)};
   }
-  return {responder, FECHA, SUGERENCIAS};
+  return {responder, FECHA, SUGERENCIAS, proximosPlazos, cuando};
 }
 
 (function(){
@@ -3118,6 +3241,8 @@ function crearAsistente(T){
     {c:'c3', t:'Evolución mensual', s:'Devengado vs. POI', q:'Evolución mensual del pliego', i:SV('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>')},
     {c:'c4', t:'Proyección de cierre', s:'Ritmo y saldo en riesgo', q:'Proyección de cierre del pliego', i:SV('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')},
     {c:'c5', t:'Comparar cortes', s:'Avance desde el anterior', q:'¿Cuánto avanzó desde el corte anterior?', i:SV('<path d="M7 7h11l-3-3M17 17H6l3 3"/>')},
+    {c:'c7', t:'Buscar una CCP', s:'Por número o por glosa', q:'Buscar una CCP', i:SV('<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>')},
+    {c:'c8', t:'Plazos por vencer', s:'Cuadro de plazos MEF 2026', q:'Plazos por vencer', i:SV('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>')},
     {c:'c6', t:'Cómo usar el tablero', s:'Filtros y descargas', q:'¿Qué secciones tiene el tablero?', i:SV('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>')}
   ];
   function guardar(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
@@ -3125,15 +3250,21 @@ function crearAsistente(T){
 
   function iniciar(T){
     if (!T || !T.DATA || document.querySelector('.atb-toggle')) return;
-    var A = crearAsistente(T);
+    var A = crearAsistente(T, {cargarCCP: function(){ if (T.CERTIF) return T.CERTIF; return fetch('certificados.json', {cache: 'no-store'}).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); }); }});
+    var PZ7 = A.proximosPlazos(7), PZ2 = PZ7.filter(function(x){ return x.d <= 2; });
     var btn = document.createElement('button');
     btn.className = 'atb-toggle'; btn.type = 'button';
     btn.setAttribute('aria-label', 'Abrir asistente del tablero'); btn.setAttribute('aria-expanded', 'false');
     btn.innerHTML = '<span class="atb-ico">' + ROBOT() + '</span><span class="atb-lbl">Pregúntale al tablero</span>' +
+      (PZ7.length ? '<span class="atb-badge" aria-label="' + PZ7.length + ' plazos por vencer esta semana">' + PZ7.length + '</span>' : '') +
       '<svg class="atb-x2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
     var tz = document.createElement('div');
     tz.className = 'atb-teaser'; tz.setAttribute('role', 'status');
-    tz.innerHTML = '<b>👋 ¿Necesitas una cifra?</b>Pregúntame por cualquier unidad, genérica o proyecto.<button type="button" aria-label="Ocultar mensaje">×</button>';
+    var ESC = function(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+    var claveTz = PZ2.length ? 'atb_pz_' + PZ2[0].f : 'atb_teaser_visto';
+    tz.innerHTML = PZ2.length
+      ? '<b>⏰ Plazo ' + (PZ2[0].d === 0 ? 'vence hoy' : PZ2[0].d === 1 ? 'vence mañana' : 'vence en ' + PZ2[0].d + ' días') + '</b>' + ESC(PZ2[0].t) + (PZ2.length > 1 ? ' <small>(+' + (PZ2.length - 1) + ' más)</small>' : '') + '<button type="button" aria-label="Ocultar mensaje">×</button>'
+      : '<b>👋 ¿Necesitas una cifra?</b>Pregúntame por cualquier unidad, genérica, proyecto o CCP.<button type="button" aria-label="Ocultar mensaje">×</button>';
     var p = document.createElement('div');
     p.className = 'atb-panel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Asistente del tablero');
     p.innerHTML = '<div class="atb-head"><div class="atb-av">' + ROBOT() + '</div><div><b>Asistente del tablero</b><span><i></i>Datos al ' + A.FECHA + (T.HORA_CORTE ? ', ' + T.HORA_CORTE : '') + '</span></div>' +
@@ -3147,11 +3278,18 @@ function crearAsistente(T){
 
     function abajo(){ msgs.scrollTop = msgs.scrollHeight; }
     function quitarChips(){ msgs.querySelectorAll('.atb-chips').forEach(function(c){ c.remove(); }); }
+    function alertaPlazos(){
+      if (!PZ7.length) return '';
+      return '<div class="atb-alerta"><b>⏰ Plazos por vencer esta semana</b><div class="atb-pzs">' + PZ7.slice(0, 3).map(function(x){
+        return '<div class="atb-pz ' + (x.d <= 2 ? 'r' : 'a') + '"><b>' + x.f.slice(8, 10) + '/' + x.f.slice(5, 7) + '</b><span class="atb-pz-d">' + A.cuando(x.d) + '</span><span class="atb-pz-t">' + ESC(x.t) + '</span></div>';
+      }).join('') + '</div><button type="button" class="atb-verpz">Ver todos los plazos →</button></div>';
+    }
     function bienvenida(){
       quitarChips();
       var w = document.createElement('div'); w.className = 'atb-bien';
-      w.innerHTML = '<div class="atb-hola"><span class="atb-hola-r">' + ROBOT() + '</span><div><b>¡Hola! 👋</b> Te doy cifras del corte y te explico cómo usar el tablero. Elige una opción o escribe, por ejemplo, <i>"¿Cómo va la SITF?"</i></div></div>' +
+      w.innerHTML = '<div class="atb-hola"><span class="atb-hola-r">' + ROBOT() + '</span><div><b>¡Hola! 👋</b> Te doy cifras del corte y te explico cómo usar el tablero. Elige una opción o escribe, por ejemplo, <i>"¿Cómo va la SITF?"</i> o <i>"CCP 100"</i></div></div>' + alertaPlazos() +
         '<div class="atb-grid">' + TARJETAS.map(function(c, i){ return '<button type="button" class="atb-card" data-i="' + i + '"><span class="ci ' + c.c + '">' + c.i + '</span><b>' + c.t + '</b><small>' + c.s + '</small></button>'; }).join('') + '</div>';
+      var vp = w.querySelector('.atb-verpz'); if (vp) vp.onclick = function(){ enviar('Plazos por vencer'); };
       w.querySelectorAll('.atb-card').forEach(function(b){ b.onclick = function(){ enviar(TARJETAS[+b.getAttribute('data-i')].q); }; });
       msgs.appendChild(w); w.scrollIntoView({block: 'start'});
     }
@@ -3171,12 +3309,16 @@ function crearAsistente(T){
       var e = document.createElement('div'); e.className = 'atb-esc'; e.setAttribute('aria-label', 'Escribiendo'); e.innerHTML = '<i></i><i></i><i></i>'; msgs.appendChild(e); abajo();
       setTimeout(function(){
         e.remove();
+        var fallo = {html: 'Tuve un problema al calcular esa respuesta 😕. ¿Puedes reformularla?', chips: A.SUGERENCIAS};
         var r;
-        try { r = A.responder(texto); } catch (err) { console.warn(err); r = {html: 'Tuve un problema al calcular esa respuesta 😕. ¿Puedes reformularla?', chips: A.SUGERENCIAS}; }
-        bot(r.html, r.chips);
+        try { r = A.responder(texto); } catch (err) { console.warn(err); r = fallo; }
+        if (r && typeof r.then === 'function'){
+          msgs.appendChild(e); abajo();
+          r.then(function(x){ e.remove(); bot(x.html, x.chips); }, function(err){ console.warn(err); e.remove(); bot(fallo.html, fallo.chips); });
+        } else { e.remove(); bot(r.html, r.chips); }
       }, 420);
     }
-    function ocultarTeaser(){ tz.classList.remove('ver'); guardar('atb_teaser_visto', '1'); }
+    function ocultarTeaser(){ tz.classList.remove('ver'); guardar(claveTz, '1'); }
     function abrir(){
       ocultarTeaser();
       p.classList.add('abierto'); btn.classList.add('abierto');
@@ -3194,7 +3336,7 @@ function crearAsistente(T){
     p.addEventListener('keydown', function(ev){ if (ev.key === 'Escape') cerrar(); });
     p.querySelector('.atb-form').addEventListener('submit', function(ev){ ev.preventDefault(); var t = inp.value; inp.value = ''; enviar(t); });
     tz.onclick = function(ev){ if (ev.target.tagName === 'BUTTON'){ ev.stopPropagation(); ocultarTeaser(); } else abrir(); };
-    if (!leer('atb_teaser_visto')){
+    if (!leer(claveTz)){
       setTimeout(function(){ if (!p.classList.contains('abierto')) tz.classList.add('ver'); }, 1800);
       setTimeout(function(){ if (tz.classList.contains('ver')) ocultarTeaser(); }, 12000);
     }

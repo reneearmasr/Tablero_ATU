@@ -2507,25 +2507,25 @@ update();
 </script>
 <!-- ===== Asistente del tablero (local, sin IA ni servicios externos) ===== -->
 <style>
-.atb-toggle{position:fixed;right:22px;bottom:22px;z-index:9998;height:52px;padding:0 20px 0 14px;border-radius:999px;border:0;background:var(--navy,#16324F);color:#fff;cursor:pointer;box-shadow:0 8px 22px rgba(20,34,56,.30);display:flex;align-items:center;gap:10px;font:600 14.5px/1 var(--font,system-ui,sans-serif);transition:transform .15s,background .15s,box-shadow .15s}
+.atb-toggle{position:fixed;right:22px;bottom:22px;z-index:9998;height:56px;padding:0 22px 0 14px;border-radius:999px;border:0;background:var(--navy,#16324F);color:#fff;cursor:pointer;box-shadow:0 8px 22px rgba(20,34,56,.30);display:flex;align-items:center;gap:10px;font:600 14.5px/1 var(--font,system-ui,sans-serif);transition:transform .15s,background .15s,box-shadow .15s}
 .atb-toggle:hover{background:var(--navy2,#22476E);transform:translateY(-2px);box-shadow:0 10px 26px rgba(20,34,56,.34)}
 .atb-toggle:focus-visible{outline:3px solid var(--teal,#12A08A);outline-offset:3px}
-.atb-ico{width:32px;height:32px;border-radius:50%;background:var(--teal,#12A08A);display:flex;align-items:center;justify-content:center;flex:none}
-.atb-ico svg{width:19px;height:19px}
+.atb-ico{width:42px;height:42px;display:flex;align-items:center;justify-content:center;flex:none;margin-left:-6px}
+.atb-ico svg{width:42px;height:42px;display:block}
 .atb-toggle .atb-x2{display:none}
-.atb-toggle.abierto{padding:0;width:52px;justify-content:center}
+.atb-toggle.abierto{padding:0;width:56px;justify-content:center}
 .atb-toggle.abierto .atb-lbl,.atb-toggle.abierto .atb-ico{display:none}
 .atb-toggle.abierto .atb-x2{display:block;width:22px;height:22px}
-.atb-teaser{position:fixed;right:22px;bottom:86px;z-index:9998;max-width:250px;background:#fff;color:var(--ink,#142238);border:1px solid var(--line,#E2E8F0);border-radius:14px 14px 4px 14px;padding:11px 34px 11px 14px;box-shadow:0 8px 24px rgba(20,34,56,.18);font:14px/1.4 var(--font,system-ui,sans-serif);cursor:pointer;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;pointer-events:none}
+.atb-teaser{position:fixed;right:22px;bottom:90px;z-index:9998;max-width:250px;background:#fff;color:var(--ink,#142238);border:1px solid var(--line,#E2E8F0);border-radius:14px 14px 4px 14px;padding:11px 34px 11px 14px;box-shadow:0 8px 24px rgba(20,34,56,.18);font:14px/1.4 var(--font,system-ui,sans-serif);cursor:pointer;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;pointer-events:none}
 .atb-teaser.ver{opacity:1;transform:none;pointer-events:auto}
 .atb-teaser b{display:block;margin-bottom:2px}
 .atb-teaser button{position:absolute;top:6px;right:6px;border:0;background:transparent;color:var(--muted,#5A6B82);font-size:17px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px}
 .atb-teaser button:hover{background:var(--line2,#EEF2F7)}
-.atb-panel{position:fixed;right:22px;bottom:86px;z-index:9999;width:390px;height:min(600px,calc(100vh - 116px));background:#fff;border-radius:16px;box-shadow:0 16px 44px rgba(20,34,56,.30);display:flex;flex-direction:column;overflow:hidden;font-family:var(--font,system-ui,sans-serif);font-size:14px;color:var(--ink,#142238);opacity:0;transform:translateY(12px) scale(.98);transform-origin:bottom right;pointer-events:none;visibility:hidden;transition:opacity .18s,transform .18s,visibility 0s .18s}
+.atb-panel{position:fixed;right:22px;bottom:90px;z-index:9999;width:390px;height:min(600px,calc(100vh - 116px));background:#fff;border-radius:16px;box-shadow:0 16px 44px rgba(20,34,56,.30);display:flex;flex-direction:column;overflow:hidden;font-family:var(--font,system-ui,sans-serif);font-size:14px;color:var(--ink,#142238);opacity:0;transform:translateY(12px) scale(.98);transform-origin:bottom right;pointer-events:none;visibility:hidden;transition:opacity .18s,transform .18s,visibility 0s .18s}
 .atb-panel.abierto{opacity:1;transform:none;pointer-events:auto;visibility:visible;transition:opacity .18s,transform .18s}
 .atb-head{background:linear-gradient(135deg,var(--navy,#16324F),var(--navy2,#22476E));color:#fff;padding:13px 12px 13px 14px;display:flex;align-items:center;gap:11px}
-.atb-av{width:38px;height:38px;border-radius:50%;background:var(--teal,#12A08A);display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.14)}
-.atb-av svg{width:21px;height:21px}
+.atb-av{width:44px;height:44px;display:flex;align-items:center;justify-content:center;flex:none}
+.atb-av svg{width:44px;height:44px;display:block}
 .atb-head b{display:block;font-size:15px}
 .atb-head span{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.85}
 .atb-head span i{width:7px;height:7px;border-radius:50%;background:#5CE0C6;display:inline-block}
@@ -2580,7 +2580,9 @@ update();
 .atb-esc i:nth-child(2){animation-delay:.15s}.atb-esc i:nth-child(3){animation-delay:.3s}
 @keyframes atbP{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
 .atb-bien{align-self:stretch;display:flex;flex-direction:column;gap:9px}
-.atb-hola{background:#fff;border:1px solid var(--line,#E2E8F0);border-radius:14px;padding:10px 12px;line-height:1.4}
+.atb-hola{background:#fff;border:1px solid var(--line,#E2E8F0);border-radius:14px;padding:10px 12px;line-height:1.4;display:flex;gap:10px;align-items:flex-start}
+.atb-hola-r{flex:none;width:52px;height:52px}
+.atb-hola-r svg{width:52px;height:52px;display:block}
 .atb-hola b{font-size:15px}
 .atb-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .atb-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:#fff;border:1px solid var(--line,#E2E8F0);border-radius:12px;padding:9px 10px;cursor:pointer;font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s,transform .15s}
@@ -2601,7 +2603,8 @@ update();
 @media (max-width:560px){
   .atb-toggle{padding:0;width:56px;height:56px;justify-content:center;right:16px;bottom:16px}
   .atb-toggle .atb-lbl{display:none}
-  .atb-ico{width:36px;height:36px}
+  .atb-ico{width:46px;height:46px;margin-left:0}
+  .atb-ico svg{width:46px;height:46px}
   .atb-teaser{right:16px;bottom:82px}
   .atb-panel{right:8px;left:8px;width:auto;bottom:80px;height:calc(100vh - 92px)}
 }
@@ -3106,6 +3109,8 @@ function crearAsistente(T){
 
 (function(){
   var ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 15.5a2 2 0 0 1-2 2H8l-4 3.5V5.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/><path d="M8.5 13V10.5M12 13V7.5M15.5 13V9"/></svg>';
+  var nRob = 0;
+  var ROBOT = function(){ nRob++; return '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><clipPath id="' + 'atbRob' + nRob + '"><circle cx="33" cy="30" r="25.6"/></clipPath></defs><path d="M14.5 47.5 L7.5 60.5 L23.5 54" fill="#fff" stroke="#16324F" stroke-width="2.4" stroke-linejoin="round"/><circle cx="33" cy="30" r="26.8" fill="#fff" stroke="#16324F" stroke-width="2.4"/><g clip-path="url(#' + 'atbRob' + nRob + ')"><path d="M17 58c0-8 7-12.5 16-12.5S49 50 49 58v6H17z" fill="#fff" stroke="#16324F" stroke-width="2"/><path d="M28.5 46.2q4.5 4.6 9 0" fill="none" stroke="#16324F" stroke-width="1.8" stroke-linecap="round"/></g><line x1="23.5" y1="14" x2="21" y2="8.6" stroke="#16324F" stroke-width="1.8" stroke-linecap="round"/><line x1="42.5" y1="14" x2="45" y2="8.6" stroke="#16324F" stroke-width="1.8" stroke-linecap="round"/><circle cx="20.6" cy="7.6" r="2.4" fill="#5CC8B8" stroke="#16324F" stroke-width="1.4"/><circle cx="45.4" cy="7.6" r="2.4" fill="#5CC8B8" stroke="#16324F" stroke-width="1.4"/><rect x="18" y="12.5" width="30" height="30" rx="14" fill="#fff" stroke="#16324F" stroke-width="2.2"/><path d="M17.5 27a15.5 15.5 0 0 1 31 0" fill="none" stroke="#5CC8B8" stroke-width="3.2" stroke-linecap="round"/><path d="M17.5 27a15.5 15.5 0 0 1 31 0" fill="none" stroke="#16324F" stroke-width="1" stroke-linecap="round" opacity=".35"/><rect x="12.6" y="22.5" width="7.2" height="13" rx="3.2" fill="#5CC8B8" stroke="#16324F" stroke-width="1.8"/><rect x="46.2" y="22.5" width="7.2" height="13" rx="3.2" fill="#5CC8B8" stroke="#16324F" stroke-width="1.8"/><path d="M15.5 35.5q1.2 6.6 9.3 6.8" fill="none" stroke="#16324F" stroke-width="1.8" stroke-linecap="round"/><circle cx="26.2" cy="42.3" r="1.9" fill="#16324F"/><rect x="22" y="21.5" width="22" height="12.5" rx="6.25" fill="#16324F"/><path d="M33.3 22.4l-3.3 10.7M37.3 22.4l-3.3 10.7" stroke="#2B4F78" stroke-width="2.2"/><circle cx="28" cy="27" r="2.3" fill="none" stroke="#5CE0C6" stroke-width="1.5"/><circle cx="38" cy="27" r="2.3" fill="none" stroke="#5CE0C6" stroke-width="1.5"/><path d="M30.6 29.4h4.8a2.4 2.4 0 0 1-4.8 0z" fill="#fff"/></svg>'; };
   var SV = function(p){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; };
   var TARJETAS = [
     {c:'c1', t:'Resumen del pliego', s:'PIM, devengado y avance', q:'Resumen del pliego', i:SV('<circle cx="12" cy="12" r="9"/><path d="M12 12l4-3"/><path d="M12 7v1M7 12h1M16 12h1"/>')},
@@ -3124,14 +3129,14 @@ function crearAsistente(T){
     var btn = document.createElement('button');
     btn.className = 'atb-toggle'; btn.type = 'button';
     btn.setAttribute('aria-label', 'Abrir asistente del tablero'); btn.setAttribute('aria-expanded', 'false');
-    btn.innerHTML = '<span class="atb-ico">' + ICO + '</span><span class="atb-lbl">Pregúntale al tablero</span>' +
+    btn.innerHTML = '<span class="atb-ico">' + ROBOT() + '</span><span class="atb-lbl">Pregúntale al tablero</span>' +
       '<svg class="atb-x2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
     var tz = document.createElement('div');
     tz.className = 'atb-teaser'; tz.setAttribute('role', 'status');
     tz.innerHTML = '<b>👋 ¿Necesitas una cifra?</b>Pregúntame por cualquier unidad, genérica o proyecto.<button type="button" aria-label="Ocultar mensaje">×</button>';
     var p = document.createElement('div');
     p.className = 'atb-panel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Asistente del tablero');
-    p.innerHTML = '<div class="atb-head"><div class="atb-av">' + ICO + '</div><div><b>Asistente del tablero</b><span><i></i>Datos al ' + A.FECHA + (T.HORA_CORTE ? ', ' + T.HORA_CORTE : '') + '</span></div>' +
+    p.innerHTML = '<div class="atb-head"><div class="atb-av">' + ROBOT() + '</div><div><b>Asistente del tablero</b><span><i></i>Datos al ' + A.FECHA + (T.HORA_CORTE ? ', ' + T.HORA_CORTE : '') + '</span></div>' +
       '<div class="atb-hb"><button class="atb-home" type="button" title="Inicio" aria-label="Volver al inicio">' + SV('<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>') + '</button>' +
       '<button class="atb-x" type="button" title="Cerrar" aria-label="Cerrar">' + SV('<path d="M6 6l12 12M18 6L6 18"/>') + '</button></div></div>' +
       '<div class="atb-msgs" aria-live="polite"></div>' +
@@ -3145,7 +3150,7 @@ function crearAsistente(T){
     function bienvenida(){
       quitarChips();
       var w = document.createElement('div'); w.className = 'atb-bien';
-      w.innerHTML = '<div class="atb-hola"><b>¡Hola! 👋</b> Te doy cifras del corte y te explico cómo usar el tablero. Elige una opción o escribe, por ejemplo, <i>"¿Cómo va la SITF?"</i></div>' +
+      w.innerHTML = '<div class="atb-hola"><span class="atb-hola-r">' + ROBOT() + '</span><div><b>¡Hola! 👋</b> Te doy cifras del corte y te explico cómo usar el tablero. Elige una opción o escribe, por ejemplo, <i>"¿Cómo va la SITF?"</i></div></div>' +
         '<div class="atb-grid">' + TARJETAS.map(function(c, i){ return '<button type="button" class="atb-card" data-i="' + i + '"><span class="ci ' + c.c + '">' + c.i + '</span><b>' + c.t + '</b><small>' + c.s + '</small></button>'; }).join('') + '</div>';
       w.querySelectorAll('.atb-card').forEach(function(b){ b.onclick = function(){ enviar(TARJETAS[+b.getAttribute('data-i')].q); }; });
       msgs.appendChild(w); w.scrollIntoView({block: 'start'});

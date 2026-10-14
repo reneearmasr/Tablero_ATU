@@ -2507,36 +2507,106 @@ update();
 </script>
 <!-- ===== Asistente del tablero (local, sin IA ni servicios externos) ===== -->
 <style>
-.atb-toggle{position:fixed;right:20px;bottom:20px;z-index:9998;width:56px;height:56px;border-radius:50%;border:0;background:var(--navy,#16324F);color:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(20,34,56,.28);display:flex;align-items:center;justify-content:center;transition:transform .15s,background .15s}
-.atb-toggle:hover{background:var(--navy2,#22476E);transform:translateY(-2px)}
-.atb-toggle:focus-visible{outline:3px solid var(--teal,#12A08A);outline-offset:2px}
-.atb-toggle svg{width:26px;height:26px}
-.atb-panel{position:fixed;right:20px;bottom:88px;z-index:9999;width:370px;height:min(560px,calc(100vh - 120px));background:#fff;border-radius:14px;box-shadow:0 12px 36px rgba(20,34,56,.28);display:none;flex-direction:column;overflow:hidden;font-family:var(--font,system-ui,sans-serif);font-size:14px;color:var(--ink,#142238)}
-.atb-panel.abierto{display:flex}
-.atb-head{background:var(--navy,#16324F);color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px}
+.atb-toggle{position:fixed;right:22px;bottom:22px;z-index:9998;height:52px;padding:0 20px 0 14px;border-radius:999px;border:0;background:var(--navy,#16324F);color:#fff;cursor:pointer;box-shadow:0 8px 22px rgba(20,34,56,.30);display:flex;align-items:center;gap:10px;font:600 14.5px/1 var(--font,system-ui,sans-serif);transition:transform .15s,background .15s,box-shadow .15s}
+.atb-toggle:hover{background:var(--navy2,#22476E);transform:translateY(-2px);box-shadow:0 10px 26px rgba(20,34,56,.34)}
+.atb-toggle:focus-visible{outline:3px solid var(--teal,#12A08A);outline-offset:3px}
+.atb-ico{width:32px;height:32px;border-radius:50%;background:var(--teal,#12A08A);display:flex;align-items:center;justify-content:center;flex:none}
+.atb-ico svg{width:19px;height:19px}
+.atb-toggle .atb-x2{display:none}
+.atb-toggle.abierto{padding:0;width:52px;justify-content:center}
+.atb-toggle.abierto .atb-lbl,.atb-toggle.abierto .atb-ico{display:none}
+.atb-toggle.abierto .atb-x2{display:block;width:22px;height:22px}
+.atb-teaser{position:fixed;right:22px;bottom:86px;z-index:9998;max-width:250px;background:#fff;color:var(--ink,#142238);border:1px solid var(--line,#E2E8F0);border-radius:14px 14px 4px 14px;padding:11px 34px 11px 14px;box-shadow:0 8px 24px rgba(20,34,56,.18);font:14px/1.4 var(--font,system-ui,sans-serif);cursor:pointer;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;pointer-events:none}
+.atb-teaser.ver{opacity:1;transform:none;pointer-events:auto}
+.atb-teaser b{display:block;margin-bottom:2px}
+.atb-teaser button{position:absolute;top:6px;right:6px;border:0;background:transparent;color:var(--muted,#5A6B82);font-size:17px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px}
+.atb-teaser button:hover{background:var(--line2,#EEF2F7)}
+.atb-panel{position:fixed;right:22px;bottom:86px;z-index:9999;width:390px;height:min(600px,calc(100vh - 116px));background:#fff;border-radius:16px;box-shadow:0 16px 44px rgba(20,34,56,.30);display:flex;flex-direction:column;overflow:hidden;font-family:var(--font,system-ui,sans-serif);font-size:14px;color:var(--ink,#142238);opacity:0;transform:translateY(12px) scale(.98);transform-origin:bottom right;pointer-events:none;visibility:hidden;transition:opacity .18s,transform .18s,visibility 0s .18s}
+.atb-panel.abierto{opacity:1;transform:none;pointer-events:auto;visibility:visible;transition:opacity .18s,transform .18s}
+.atb-head{background:linear-gradient(135deg,var(--navy,#16324F),var(--navy2,#22476E));color:#fff;padding:13px 12px 13px 14px;display:flex;align-items:center;gap:11px}
+.atb-av{width:38px;height:38px;border-radius:50%;background:var(--teal,#12A08A);display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.14)}
+.atb-av svg{width:21px;height:21px}
 .atb-head b{display:block;font-size:15px}
-.atb-head span{display:block;font-size:12px;opacity:.8}
-.atb-x{margin-left:auto;background:transparent;border:0;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px}
-.atb-x:hover{background:rgba(255,255,255,.15)}
-.atb-msgs{flex:1;overflow-y:auto;padding:12px;background:var(--bg,#F2F5F9);display:flex;flex-direction:column;gap:8px}
-.atb-m{max-width:88%;padding:9px 12px;border-radius:12px;line-height:1.45;word-wrap:break-word}
-.atb-m.bot{align-self:flex-start;background:#fff;border:1px solid var(--line,#E2E8F0);border-bottom-left-radius:4px}
+.atb-head span{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.85}
+.atb-head span i{width:7px;height:7px;border-radius:50%;background:#5CE0C6;display:inline-block}
+.atb-hb{margin-left:auto;display:flex;gap:2px}
+.atb-hb button{background:transparent;border:0;color:#fff;cursor:pointer;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.atb-hb button:hover{background:rgba(255,255,255,.14)}
+.atb-hb svg{width:18px;height:18px}
+.atb-msgs{flex:1;overflow-y:auto;padding:14px 12px;background:var(--bg,#F2F5F9);display:flex;flex-direction:column;gap:9px}
+.atb-m{max-width:90%;padding:10px 12px;border-radius:14px;line-height:1.45;word-wrap:break-word}
+.atb-m.bot{align-self:flex-start;background:#fff;border:1px solid var(--line,#E2E8F0);border-bottom-left-radius:4px;width:90%}
 .atb-m.yo{align-self:flex-end;background:var(--navy,#16324F);color:#fff;border-bottom-right-radius:4px;white-space:pre-wrap}
 .atb-m ul{margin:6px 0;padding-left:18px}
 .atb-m li{margin:2px 0}
-.atb-m small{color:var(--muted,#5A6B82)}
+.atb-m p{margin:6px 0}
+.atb-tit{font-weight:650;margin-bottom:8px;line-height:1.35}
+.atb-tit span{display:block;font-weight:400;font-size:12px;color:var(--muted,#5A6B82)}
+.atb-q{margin:10px 0 0 !important;color:var(--ink,#142238)}
+.atb-nota{display:block;margin-top:6px;color:var(--muted,#5A6B82);font-size:11.5px;line-height:1.35}
+.atb-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+.atb-kpi{background:var(--bg,#F2F5F9);border-radius:10px;padding:7px 8px;min-width:0}
+.atb-kpi span{display:block;font-size:11px;color:var(--muted,#5A6B82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.atb-kpi b{display:block;font-size:14.5px;font-weight:700;white-space:nowrap;letter-spacing:-.01em}
+.atb-kpi.k-v{background:#E3F5F1}.atb-kpi.k-v b{color:#0B7A68}
+.atb-kpi.k-a{background:#FDF1DE}.atb-kpi.k-a b{color:#A86A0C}
+.atb-kpi.k-r{background:#FBE7E6}.atb-kpi.k-r b{color:#B23A36}
+.atb-bar{display:block;height:7px;border-radius:999px;background:var(--line2,#EEF2F7);overflow:hidden}
+.atb-bar i{display:block;height:100%;border-radius:999px}
+.atb-bar i.v{background:#12A08A}.atb-bar i.a{background:#F2A93B}.atb-bar i.r{background:#D9534F}.atb-bar i.n{background:#16324F}.atb-bar i.b{background:#3A7BD5}.atb-bar i.p{background:#7A6FD0}
+.atb-rows{display:flex;flex-direction:column;gap:9px;margin:4px 0}
+.atb-row-h{display:flex;justify-content:space-between;gap:8px;margin-bottom:3px;font-size:13.5px}
+.atb-row-h b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.atb-row-h span{font-weight:700;white-space:nowrap}
+.atb-row-h span.v{color:#0B7A68}.atb-row-h span.a{color:#A86A0C}.atb-row-h span.r{color:#B23A36}.atb-row-h span.n{color:#16324F}.atb-row-h span.b{color:#2D63AE}.atb-row-h span.p{color:#5C51B4}
+.atb-row small{display:block;margin-top:2px;color:var(--muted,#5A6B82);font-size:11.5px}
+.atb-dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;margin-top:9px;font-size:12.5px}
+.atb-dl span{color:var(--muted,#5A6B82);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.atb-dl b{text-align:right;font-weight:600;white-space:nowrap}
+.atb-svg{display:block;width:100%;height:auto;margin:2px 0}
+.atb-svg rect:hover{opacity:.8}
+.atb-ley{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--muted,#5A6B82);margin-top:5px}
+.atb-ley i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.atb-ley .lv{background:#12A08A}.atb-ley .lc{background:#8FD3C6}.atb-ley .lp{background:#16324F;height:3px;vertical-align:2px;width:12px}.atb-ley .lr{background:#D9534F}
+.atb-ley-r{margin-left:auto}
+.atb-stack{display:flex;height:12px;border-radius:999px;background:var(--line2,#EEF2F7);overflow:hidden}
+.atb-stack i{display:block;height:100%}
+.atb-stack .s1{background:#12A08A}.atb-stack .s2{background:#8FD3C6}.atb-stack .s3{background:repeating-linear-gradient(45deg,#D9534F 0 4px,#E57F7B 4px 8px)}
 .atb-chips{display:flex;flex-wrap:wrap;gap:6px;align-self:flex-start;max-width:96%}
-.atb-chip{border:1px solid var(--teal,#12A08A);color:#0E7C6B;background:#fff;border-radius:999px;padding:5px 10px;font-size:12.5px;cursor:pointer;text-align:left}
-.atb-chip:hover{background:#E7F6F3}
-.atb-esc{align-self:flex-start;color:var(--muted,#5A6B82);font-size:12px;padding:2px 4px}
+.atb-chip{border:1px solid var(--teal,#12A08A);color:#0B7A68;background:#fff;border-radius:999px;padding:5px 11px;font:500 12.5px/1.3 var(--font,system-ui,sans-serif);cursor:pointer;text-align:left}
+.atb-chip:hover{background:#E3F5F1}
+.atb-esc{align-self:flex-start;background:#fff;border:1px solid var(--line,#E2E8F0);border-radius:14px;border-bottom-left-radius:4px;padding:11px 14px;display:flex;gap:4px}
+.atb-esc i{width:6px;height:6px;border-radius:50%;background:#9AA8BA;animation:atbP 1s infinite ease-in-out}
+.atb-esc i:nth-child(2){animation-delay:.15s}.atb-esc i:nth-child(3){animation-delay:.3s}
+@keyframes atbP{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+.atb-bien{align-self:stretch;display:flex;flex-direction:column;gap:9px}
+.atb-hola{background:#fff;border:1px solid var(--line,#E2E8F0);border-radius:14px;padding:10px 12px;line-height:1.4}
+.atb-hola b{font-size:15px}
+.atb-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.atb-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:#fff;border:1px solid var(--line,#E2E8F0);border-radius:12px;padding:9px 10px;cursor:pointer;font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s,transform .15s}
+.atb-card:hover{border-color:var(--teal,#12A08A);box-shadow:0 4px 14px rgba(18,160,138,.14);transform:translateY(-1px)}
+.atb-card:focus-visible{outline:2px solid var(--teal,#12A08A);outline-offset:2px}
+.atb-card .ci{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.atb-card .ci svg{width:16px;height:16px}
+.atb-card b{font-size:13.5px;line-height:1.25}
+.atb-card small{font-size:11.5px;color:var(--muted,#5A6B82);line-height:1.3}
+.ci.c1{background:#E3EAF3;color:#16324F}.ci.c2{background:#FBE7E6;color:#B23A36}.ci.c3{background:#E3F5F1;color:#0B7A68}.ci.c4{background:#ECEAFA;color:#5C51B4}.ci.c5{background:#E4EEFB;color:#2D63AE}.ci.c6{background:#FDF1DE;color:#A86A0C}
 .atb-form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line,#E2E8F0);background:#fff}
-.atb-in{flex:1;border:1px solid var(--line,#E2E8F0);border-radius:10px;padding:9px 11px;font:inherit;outline:none}
-.atb-in:focus{border-color:var(--navy2,#22476E)}
-.atb-send{border:0;background:var(--teal,#12A08A);color:#fff;border-radius:10px;padding:0 14px;font-weight:600;cursor:pointer}
+.atb-in{flex:1;min-width:0;border:1px solid var(--line,#E2E8F0);border-radius:12px;padding:10px 12px;font:inherit;outline:none;background:var(--bg,#F2F5F9)}
+.atb-in:focus{border-color:var(--navy2,#22476E);background:#fff}
+.atb-send{border:0;background:var(--teal,#12A08A);color:#fff;border-radius:12px;width:44px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none}
 .atb-send:hover{background:#0E8A76}
-.atb-pie{font-size:11px;color:var(--muted,#5A6B82);padding:0 12px 8px;background:#fff}
-@media (max-width:480px){.atb-panel{right:8px;left:8px;width:auto;bottom:84px;height:calc(100vh - 100px)}}
-@media print{.atb-toggle,.atb-panel{display:none !important}}
+.atb-send svg{width:19px;height:19px}
+.atb-pie{font-size:11px;color:var(--muted,#5A6B82);padding:0 12px 9px;background:#fff}
+@media (max-width:560px){
+  .atb-toggle{padding:0;width:56px;height:56px;justify-content:center;right:16px;bottom:16px}
+  .atb-toggle .atb-lbl{display:none}
+  .atb-ico{width:36px;height:36px}
+  .atb-teaser{right:16px;bottom:82px}
+  .atb-panel{right:8px;left:8px;width:auto;bottom:80px;height:calc(100vh - 92px)}
+}
+@media (prefers-reduced-motion:reduce){.atb-panel,.atb-teaser,.atb-toggle,.atb-card{transition:none}.atb-esc i{animation:none}}
+@media print{.atb-toggle,.atb-panel,.atb-teaser{display:none !important}}
 </style>
 <script>
 function crearAsistente(T){
@@ -2748,16 +2818,25 @@ function crearAsistente(T){
   const enE = ents => ents.length ? 'en ' + etiqueta(ents) : 'en el pliego ATU';
   const lista = items => '<ul>' + items.map(i => '<li>' + i + '</li>').join('') + '</ul>';
 
+  /* ---------- piezas visuales ---------- */
+  const clamp = v => Math.max(0, Math.min(100, v));
+  const tono = r => r >= 0.70 ? 'v' : r >= 0.50 ? 'a' : 'r';
+  const barra = (frac, cls) => '<span class="atb-bar"><i class="' + cls + '" style="width:' + clamp(frac * 100).toFixed(1) + '%"></i></span>';
+  const fila = (nombre, valor, frac, cls, sub) => '<div class="atb-row"><div class="atb-row-h"><b>' + esc(nombre) + '</b><span class="' + cls + '">' + valor + '</span></div>' + barra(frac, cls) + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
+  const kpi = (lbl, val, cls) => '<div class="atb-kpi' + (cls ? ' ' + cls : '') + '"><span>' + lbl + '</span><b>' + val + '</b></div>';
+  const titulo = (ico, txt) => '<div class="atb-tit">' + ico + ' ' + txt + '</div>';
+  const pie = txt => '<p class="atb-q">' + txt + '</p>';
+  const nota = txt => '<small class="atb-nota">' + txt + '</small>';
+
   function rFicha(ents, rows){
     const t = agg(rows), av = t.pim ? t.dv / t.pim : 0;
     const L = txtEtiq(ents);
     return {
-      html: '📊 ' + etiqueta(ents, true) + ' al ' + FECHA + ':' + lista([
-        'PIM: <b>' + fML(t.pim) + '</b>',
-        'Devengado: <b>' + fML(t.dv) + '</b> · avance <b>' + pct(t.dv, t.pim) + '</b> ' + semaforo(av),
-        'Comprometido: ' + fML(t.co) + ' (' + pct(t.co, t.pim) + ' del PIM)',
-        'Saldo por devengar: ' + fML(t.pim - t.dv)
-      ]) + '¿Quieres ver su evolución mensual o la proyección de cierre?',
+      html: titulo('📊', etiqueta(ents, true) + ' <span>al ' + FECHA + '</span>') +
+        '<div class="atb-kpis">' + kpi('PIM', fM(t.pim)) + kpi('Devengado', fM(t.dv)) + kpi('Avance', pct(t.dv, t.pim), 'k-' + tono(av)) + '</div>' +
+        barra(av, tono(av)) +
+        '<div class="atb-dl"><span>Comprometido</span><b>' + fML(t.co) + ' · ' + pct(t.co, t.pim) + '</b><span>Saldo por devengar</span><b>' + fML(t.pim - t.dv) + '</b></div>' +
+        pie('¿Quieres ver su evolución mensual o la proyección de cierre?'),
       chips: ['Evolución mensual ' + de(ents), 'Proyección de cierre ' + de(ents), ents.length ? 'Comparar ' + L + ' con el corte anterior' : 'Unidades con menor avance']
     };
   }
@@ -2769,44 +2848,83 @@ function crearAsistente(T){
     const chicos = orden === 'asc' ? g.filter(x => x.pim < 100000).length : 0;
     if (chicos) g = g.filter(x => x.pim >= 100000);
     const av = x => x.pim ? x.dv / x.pim : 0;
-    let titulo;
-    if (orden === 'asc'){ g.sort((a, b) => av(a) - av(b)); titulo = 'con <b>menor avance</b>'; }
-    else if (orden === 'desc'){ g.sort((a, b) => av(b) - av(a)); titulo = 'con <b>mayor avance</b>'; }
-    else if (orden === 'saldo'){ g.sort((a, b) => (b.pim - b.dv) - (a.pim - a.dv)); titulo = 'con <b>mayor saldo por devengar</b>'; }
-    else if (orden === 'riesgo'){ g.forEach(x => x.rk = riesgo(x)); g = g.filter(x => x.rk > 0).sort((a, b) => b.rk - a.rk); titulo = 'con <b>mayor saldo en riesgo</b>'; }
-    else { g.sort((a, b) => b.pim - a.pim); titulo = 'por PIM'; }
+    let tt;
+    if (orden === 'asc'){ g.sort((a, b) => av(a) - av(b)); tt = 'con <b>menor avance</b>'; }
+    else if (orden === 'desc'){ g.sort((a, b) => av(b) - av(a)); tt = 'con <b>mayor avance</b>'; }
+    else if (orden === 'saldo'){ g.sort((a, b) => (b.pim - b.dv) - (a.pim - a.dv)); tt = 'con <b>mayor saldo por devengar</b>'; }
+    else if (orden === 'riesgo'){ g.forEach(x => x.rk = riesgo(x)); g = g.filter(x => x.rk > 0).sort((a, b) => b.rk - a.rk); tt = 'con <b>mayor saldo en riesgo</b>'; }
+    else { g.sort((a, b) => b.pim - a.pim); tt = 'por PIM'; }
     const max = orden ? 6 : 8;
-    const filas = g.slice(0, max).map(x => '<b>' + esc(x.k) + '</b>: ' + (orden === 'riesgo'
-      ? fM(x.rk) + ' en riesgo (' + pct(x.rk, x.pim) + ' de su PIM)'
-      : orden === 'saldo' ? fM(x.pim - x.dv) + ' por devengar · avance ' + pct(x.dv, x.pim)
-      : pct(x.dv, x.pim) + ' ' + semaforo(av(x)) + ' · PIM ' + fM(x.pim)));
-    if (!filas.length) return {html: 'Con el ritmo actual, ninguna de las ' + PLURAL[k] + ' ' + deE(ents) + ' queda con saldo en riesgo ✅. ¿Quieres ver el avance por ' + DIM[k].toLowerCase() + '?', chips: ['Avance por ' + DIM[k].toLowerCase()]};
+    const vis = g.slice(0, max);
+    if (!vis.length) return {html: 'Con el ritmo actual, ninguna de las ' + PLURAL[k] + ' ' + deE(ents) + ' queda con saldo en riesgo ✅. ¿Quieres ver el avance por ' + DIM[k].toLowerCase() + '?', chips: ['Avance por ' + DIM[k].toLowerCase()]};
+    const mxR = Math.max(...vis.map(x => x.rk || 0)), mxS = Math.max(...vis.map(x => x.pim - x.dv));
+    const filas = vis.map(x => orden === 'riesgo'
+      ? fila(x.k, fM(x.rk), mxR ? x.rk / mxR : 0, 'r', pct(x.rk, x.pim) + ' de su PIM · avance ' + pct(x.dv, x.pim))
+      : orden === 'saldo'
+        ? fila(x.k, fM(x.pim - x.dv), mxS ? (x.pim - x.dv) / mxS : 0, 'n', 'avance ' + pct(x.dv, x.pim) + ' · PIM ' + fM(x.pim))
+        : fila(x.k, pct(x.dv, x.pim), av(x), tono(av(x)), 'PIM ' + fM(x.pim) + ' · devengado ' + fM(x.dv))).join('');
     const sub = ents.length ? ' de ' + etiqueta(ents) : '';
-    const nota = (excl && orden ? '<br><small>No incluye "OPP (Otros)", que es una bolsa de recursos.</small>' : '') + (chicos ? '<br><small>' + (chicos === 1 ? 'Se omite 1' : 'Se omiten ' + chicos) + ' con PIM menor a S/ 100 mil.</small>' : '') + (g.length > max ? '<br><small>Se muestran ' + max + ' de ' + g.length + '.</small>' : '');
-    const notaF = nota ? nota + '<br>' : '';
+    const notas = [];
+    if (excl && orden) notas.push('No incluye "OPP (Otros)", que es una bolsa de recursos.');
+    if (chicos) notas.push((chicos === 1 ? 'Se omite 1' : 'Se omiten ' + chicos) + ' con PIM menor a S/ 100 mil.');
+    if (g.length > max) notas.push('Se muestran ' + max + ' de ' + g.length + '.');
     const top = g[0] ? g[0].k : '';
+    const leyenda = orden === 'riesgo' ? 'Barra: saldo en riesgo relativo al mayor.' : orden === 'saldo' ? 'Barra: saldo por devengar relativo al mayor.' : 'Barra: avance (devengado / PIM).';
     return {
-      html: (orden === 'riesgo' ? '⚠️ ' : '📊 ') + PLURAL[k][0].toUpperCase() + PLURAL[k].slice(1) + sub + ' ' + titulo + ' al ' + FECHA + ':' + lista(filas) + notaF + '¿Quieres ver el detalle de alguna?',
+      html: titulo(orden === 'riesgo' ? '⚠️' : '📊', PLURAL[k][0].toUpperCase() + PLURAL[k].slice(1) + sub + ' ' + tt + ' <span>al ' + FECHA + '</span>') +
+        '<div class="atb-rows">' + filas + '</div>' + nota(leyenda + (notas.length ? ' ' + notas.join(' ') : '')) +
+        pie('¿Quieres ver el detalle de alguna?'),
       chips: top ? (function(){ const pre = txtEtiq(ents) ? txtEtiq(ents) + ' ' : ''; return [pre + String(top) + (k === 'uo' || k === 'og' ? ' por genérica' : ''), 'Evolución mensual de ' + pre + top]; })() : []
     };
+  }
+
+  function grafMensual(t){
+    const W = 300, Hh = 118, top = 8, base = 96, n = 12, bw = 16, gap = (W - 8) / n;
+    const mx = Math.max(1, ...t.dvm, ...t.poi);
+    const y = v => base - (base - top) * (v / mx);
+    let s = '<svg class="atb-svg" viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="Devengado mensual frente a la programación POI">';
+    s += '<line x1="4" x2="' + (W - 4) + '" y1="' + base + '" y2="' + base + '" stroke="#CBD5E1" stroke-width="1"/>';
+    const pts = [];
+    for (let m = 0; m < n; m++){
+      const cx = 4 + gap * m + gap / 2;
+      const tip = MESN[m][0].toUpperCase() + MESN[m].slice(1) + ': devengado ' + fM(t.dvm[m]) + ' · POI ' + fM(t.poi[m]) + (t.poi[m] && m <= LAST ? ' (' + Math.round(100 * t.dvm[m] / t.poi[m]) + ' %)' : '');
+      if (m <= LAST){
+        const h = base - y(t.dvm[m]);
+        s += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + y(t.dvm[m]).toFixed(1) + '" width="' + bw + '" height="' + Math.max(0.5, h).toFixed(1) + '" rx="2" fill="' + (m === LAST ? '#8FD3C6' : '#12A08A') + '"><title>' + tip + '</title></rect>';
+      } else {
+        s += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + top + '" width="' + bw + '" height="' + (base - top) + '" fill="transparent"><title>' + tip + '</title></rect>';
+      }
+      pts.push(cx.toFixed(1) + ',' + y(t.poi[m]).toFixed(1));
+      s += '<text x="' + cx.toFixed(1) + '" y="' + (base + 13) + '" text-anchor="middle" font-size="9" fill="' + (m <= LAST ? '#5A6B82' : '#A9B4C2') + '">' + MES[m][0] + '</text>';
+    }
+    s += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="#16324F" stroke-width="1.6" stroke-linejoin="round"/>';
+    pts.forEach(p => { const [px, py] = p.split(','); s += '<circle cx="' + px + '" cy="' + py + '" r="2.2" fill="#16324F"/>'; });
+    s += '</svg>';
+    return s + '<div class="atb-ley"><span><i class="lv"></i>Devengado</span><span><i class="lc"></i>Mes en curso</span><span><i class="lp"></i>POI</span><span class="atb-ley-r">máx. ' + fM(mx) + '</span></div>';
   }
 
   function rMensual(ents, rows, meses){
     const t = agg(rows);
     if (meses.length === 1){
       const m = meses[0];
-      if (m > LAST) return {html: '📅 ' + MESN[m][0].toUpperCase() + MESN[m].slice(1) + ' aún no tiene ejecución. Lo programado en el POI para ese mes es <b>' + fML(t.poi[m]) + '</b> en ' + etiqueta(ents) + '. ¿Quieres ver los meses ya ejecutados?', chips: ['Evolución mensual ' + de(ents)]};
-      return {html: '📅 ' + MESN[m][0].toUpperCase() + MESN[m].slice(1) + (m === LAST ? ' (mes en curso, al ' + FECHA + ')' : '') + ' ' + enE(ents) + ':' + lista([
-        'Devengado del mes: <b>' + fML(t.dvm[m]) + '</b>',
-        'Programado POI: ' + fML(t.poi[m]) + (t.poi[m] ? ' · cumplimiento <b>' + pct(t.dvm[m], t.poi[m]) + '</b>' : ''),
-        'Devengado acumulado a fin de mes: ' + fML(sum(t.dvm.slice(0, m + 1)))
-      ]) + '¿Quieres compararlo con otro mes?', chips: ['Evolución mensual ' + de(ents)]};
+      const Mn = MESN[m][0].toUpperCase() + MESN[m].slice(1);
+      if (m > LAST) return {html: titulo('📅', Mn + ' ' + enE(ents)) + '<p>Aún no tiene ejecución. Lo programado en el POI para ese mes es <b>' + fML(t.poi[m]) + '</b>.</p>' + pie('¿Quieres ver los meses ya ejecutados?'), chips: ['Evolución mensual ' + de(ents)]};
+      const cum = t.poi[m] ? t.dvm[m] / t.poi[m] : 0;
+      return {html: titulo('📅', Mn + ' ' + enE(ents) + (m === LAST ? ' <span>mes en curso, al ' + FECHA + '</span>' : '')) +
+        '<div class="atb-kpis">' + kpi('Devengado', fM(t.dvm[m])) + kpi('POI', fM(t.poi[m])) + kpi('Cumplimiento', t.poi[m] ? pct(t.dvm[m], t.poi[m]) : '—', t.poi[m] ? 'k-' + tono(cum) : '') + '</div>' +
+        (t.poi[m] ? barra(cum, tono(cum)) : '') +
+        '<div class="atb-dl"><span>Acumulado a fin de mes</span><b>' + fML(sum(t.dvm.slice(0, m + 1))) + '</b></div>' +
+        pie('¿Quieres compararlo con otro mes?'), chips: ['Evolución mensual ' + de(ents)]};
     }
-    const filas = [];
-    for (let m = 0; m <= LAST; m++) filas.push(MES[m] + ': <b>' + fM(t.dvm[m]) + '</b> · POI ' + fM(t.poi[m]) + (t.poi[m] ? ' (' + Math.round(100 * t.dvm[m] / t.poi[m]) + ' %)' : '') + (m === LAST ? ' <small>mes en curso</small>' : ''));
     const poiRest = sum(t.poi.slice(LAST + 1));
-    return {html: '📅 Devengado mensual vs. POI ' + deE(ents) + ' (al ' + FECHA + '):' + lista(filas) +
-      'Acumulado: <b>' + fML(t.dv) + '</b> (' + pct(t.dv, t.pim) + ' del PIM). Para lo que resta del año, el POI programa ' + fML(poiRest) + '. ¿Quieres ver la proyección de cierre?',
+    const ult = LAST > 0 ? LAST - 1 : LAST;
+    const Mu = MESN[ult][0].toUpperCase() + MESN[ult].slice(1), Ml = MESN[LAST][0].toUpperCase() + MESN[LAST].slice(1);
+    return {html: titulo('📅', 'Devengado mensual vs. POI ' + deE(ents) + ' <span>al ' + FECHA + '</span>') + grafMensual(t) +
+      '<div class="atb-kpis" style="margin-top:9px">' + kpi('Acumulado', fM(t.dv)) + kpi('% del PIM', pct(t.dv, t.pim), 'k-' + tono(t.pim ? t.dv / t.pim : 0)) + kpi('POI pendiente', fM(poiRest)) + '</div>' +
+      '<p><b>' + Mu + '</b> (último mes cerrado): ' + fM(t.dvm[ult]) + ' frente a ' + fM(t.poi[ult]) + ' del POI' + (t.poi[ult] ? ' (<b>' + Math.round(100 * t.dvm[ult] / t.poi[ult]) + ' %</b>)' : '') + '. ' +
+      '<b>' + Ml + '</b> (en curso) lleva ' + fM(t.dvm[LAST]) + ' de ' + fM(t.poi[LAST]) + ' programados.</p>' +
+      nota('Pasa el cursor sobre una barra para ver el detalle del mes.') +
+      pie('¿Quieres ver la proyección de cierre?'),
       chips: ['Proyección de cierre ' + de(ents)]};
   }
 
@@ -2814,23 +2932,30 @@ function crearAsistente(T){
     const t = agg(rows); const rit = t.r3 / M3.length;
     const cierre = t.dv + rit * ML, saldo = Math.max(0, t.pim - t.dv), req = ML > 0 ? saldo / ML : 0, rk = riesgo(t);
     const meses3 = M3.map(m => MESN[m]).join(', ');
-    return {html: '🔮 Proyección de cierre ' + deE(ents) + ' (estimación simple):' + lista([
-      'Ritmo actual: <b>' + fM(rit) + '/mes</b> (promedio de ' + meses3 + ')',
-      'Cierre a ese ritmo: <b>' + fML(cierre) + '</b> = <b>' + pct(cierre, t.pim) + '</b> del PIM',
-      'Para llegar al 100 %: ' + fM(req) + '/mes' + (rit > 0 ? ' (' + (req / rit).toFixed(1) + ' veces el ritmo actual)' : ''),
-      'Saldo en riesgo: <b>' + fML(rk) + '</b>' + (t.pim ? ' (' + pct(rk, t.pim) + ' del PIM)' : '')
-    ]) + '¿Quieres ver qué unidades concentran el saldo en riesgo?', chips: [ents.some(e => e.k === 'uo') ? txtEtiq(ents) + ': proyectos con mayor saldo en riesgo' : (ents.length ? txtEtiq(ents) + ': ' : '') + 'unidades con mayor saldo en riesgo']};
+    const P = t.pim || 1, w1 = clamp(100 * t.dv / P), w2 = clamp(100 * Math.min(cierre, t.pim) / P) - w1, w3 = clamp(100 * rk / P);
+    const av = t.pim ? cierre / t.pim : 0;
+    return {html: titulo('🔮', 'Proyección de cierre ' + deE(ents) + ' <span>estimación simple</span>') +
+      '<div class="atb-kpis">' + kpi('Cierre', fM(cierre)) + kpi('% del PIM', pct(cierre, t.pim), 'k-' + tono(av)) + kpi('En riesgo', fM(rk), rk > 0 ? 'k-r' : 'k-v') + '</div>' +
+      '<span class="atb-stack"><i class="s1" style="width:' + w1.toFixed(1) + '%"></i><i class="s2" style="width:' + Math.max(0, w2).toFixed(1) + '%"></i><i class="s3" style="width:' + w3.toFixed(1) + '%"></i></span>' +
+      '<div class="atb-ley"><span><i class="lv"></i>Devengado ' + pct(t.dv, t.pim) + '</span><span><i class="lc"></i>Adicional a ritmo actual</span><span><i class="lr"></i>Saldo en riesgo</span></div>' +
+      '<div class="atb-dl"><span>Ritmo actual</span><b>' + fM(rit) + '/mes</b><span>Requerido para el 100 %</span><b>' + fM(req) + '/mes' + (rit > 0 ? ' (' + (req / rit).toFixed(1) + '×)' : '') + '</b></div>' +
+      nota('Ritmo actual: promedio de ' + meses3 + '.') +
+      pie('¿Quieres ver qué unidades concentran el saldo en riesgo?'),
+      chips: [ents.some(e => e.k === 'uo') ? txtEtiq(ents) + ': proyectos con mayor saldo en riesgo' : (ents.length ? txtEtiq(ents) + ': ' : '') + 'unidades con mayor saldo en riesgo']};
   }
 
   function rCadena(ents, rows){
     const t = agg(rows);
     const e1 = Math.max(0, t.pim - t.ce), e2 = Math.max(0, t.ce - t.co), e3 = Math.max(0, t.co - t.dv);
     const mx = Math.max(e1, e2, e3), cuello = mx === e1 ? 'sin certificar' : mx === e2 ? 'certificado sin comprometer' : 'comprometido sin devengar';
-    return {html: '🔗 Cadena de ejecución ' + deE(ents) + ' al ' + FECHA + ':' + lista([
-      'Certificado: ' + fM(t.ce) + ' (' + pct(t.ce, t.pim) + ' del PIM)',
-      'Comprometido: ' + fM(t.co) + ' (' + pct(t.co, t.pim) + ')',
-      'Devengado: ' + fM(t.dv) + ' (' + pct(t.dv, t.pim) + ')'
-    ]) + 'El mayor saldo está en <b>' + cuello + '</b>: ' + fML(mx) + '. ¿Quieres ver dónde se concentra ese saldo?',
+    const P = t.pim || 1;
+    return {html: titulo('🔗', 'Cadena de ejecución ' + deE(ents) + ' <span>al ' + FECHA + '</span>') +
+      '<div class="atb-rows">' +
+        fila('Certificado', pct(t.ce, t.pim), t.ce / P, 'b', fM(t.ce)) +
+        fila('Comprometido', pct(t.co, t.pim), t.co / P, 'p', fM(t.co)) +
+        fila('Devengado', pct(t.dv, t.pim), t.dv / P, 'v', fM(t.dv)) +
+      '</div><p>El mayor saldo está en <b>' + cuello + '</b>: ' + fML(mx) + '.</p>' +
+      pie('¿Quieres ver dónde se concentra ese saldo?'),
       chips: [ents.some(e => e.k === 'uo') ? txtEtiq(ents) + ' proyectos con mayor saldo por devengar' : (ents.length ? txtEtiq(ents) + ' ' : '') + 'unidades con mayor saldo por devengar']};
   }
 
@@ -2860,18 +2985,19 @@ function crearAsistente(T){
     const tot = M => { let pim = 0, co = 0, dv = 0; for (const x of M.values()){ pim += x[1]; co += x[3]; dv += x[4]; } return {pim, co, dv}; };
     const a = tot(A), b = tot(B);
     const fb = c.base.etiqueta.slice(0, 10), fa = c.actual.etiqueta.slice(0, 10);
-    let html = '📈 ' + etiqueta(ents, true) + ': del <b>' + fb + '</b> al <b>' + fa + '</b>' + (c.exacto ? '' : ' <small>(corte más cercano disponible)</small>') + ':' + lista([
-      'Devengado: ' + fM(a.dv) + ' → <b>' + fM(b.dv) + '</b> (<b>' + sgn(b.dv - a.dv) + '</b>)',
-      'Avance: ' + pct(a.dv, a.pim) + ' → <b>' + pct(b.dv, b.pim) + '</b>',
-      'Comprometido: ' + sgn(b.co - a.co) + (Math.abs(b.pim - a.pim) > 1 ? ' · PIM ' + sgn(b.pim - a.pim) : '')
-    ]);
+    const d = b.dv - a.dv;
+    let html = titulo('📈', etiqueta(ents, true) + ' <span>del ' + fb + ' al ' + fa + '</span>') +
+      (c.exacto ? '' : nota('Se usó el corte más cercano disponible.')) +
+      '<div class="atb-kpis">' + kpi('Δ Devengado', sgn(d), d > 0 ? 'k-v' : d < 0 ? 'k-r' : '') + kpi('Avance antes', pct(a.dv, a.pim)) + kpi('Avance ahora', pct(b.dv, b.pim), 'k-' + tono(b.pim ? b.dv / b.pim : 0)) + '</div>' +
+      '<div class="atb-dl"><span>Devengado</span><b>' + fM(a.dv) + ' → ' + fM(b.dv) + '</b><span>Δ Comprometido</span><b>' + sgn(b.co - a.co) + '</b>' + (Math.abs(b.pim - a.pim) > 1 ? '<span>Δ PIM</span><b>' + sgn(b.pim - a.pim) + '</b>' : '') + '</div>';
     if (k){
       const porK = new Map();
       for (const r of rows){ const xa = A.get(r.h), xb = B.get(r.h); if (!xb) continue; const key = r[k] || '(sin dato)'; if (!porK.has(key)) porK.set(key, 0); porK.set(key, porK.get(key) + (xb[4] - (xa ? xa[4] : 0))); }
       const top = [...porK].filter(x => Math.abs(x[1]) >= 1).sort((p, q) => q[1] - p[1]).slice(0, 5);
-      html += top.length ? 'Mayor aumento del devengado por ' + DIM[k].toLowerCase() + ':' + lista(top.map(([kk, v]) => '<b>' + esc(kk) + '</b>: ' + sgn(v))) : 'Ninguna ' + DIM[k].toLowerCase() + ' registró variación en el devengado. ';
+      const mxd = Math.max(1, ...top.map(x => Math.abs(x[1])));
+      html += top.length ? '<p>Mayor aumento del devengado por ' + DIM[k].toLowerCase() + ':</p><div class="atb-rows">' + top.map(([kk, v]) => fila(kk, sgn(v), Math.abs(v) / mxd, v >= 0 ? 'v' : 'r', '')).join('') + '</div>' : '<p>Ninguna ' + DIM[k].toLowerCase() + ' registró variación en el devengado.</p>';
     }
-    return {html: html + '¿Quieres compararlo con otra fecha?', chips: k ? [] : ['¿Qué unidades avanzaron más desde el ' + fb.slice(0, 5) + '?']};
+    return {html: html + pie('¿Quieres compararlo con otra fecha?'), chips: k ? [] : ['¿Qué unidades avanzaron más desde el ' + fb.slice(0, 5) + '?']};
   }
 
   function rListado(k){
@@ -2952,6 +3078,8 @@ function crearAsistente(T){
       const cadena = /\b(cuello|cadena|etapa|certificad|sin comprometer|comprometid)/.test(n) && !k;
       const mensual = meses.length || /\b(mensual|mes a mes|por mes|meses|poi|programad|programacion)\b/.test(n);
       if ((ordenAsc || ordenDesc || ordenRiesgo || ordenSaldo) && !k && !comparar && !(proy && !ordenRiesgo)) k = ents.some(e => e.k === 'uo') ? 'c2' : 'uo';
+      if (k && ents.some(e => e.k === k)) k = k === 'og' ? 'uo' : k === 'uo' ? 'c2' : k;
+      if (k === 'uo' && ents.some(e => e.k === 'og') && !ents.some(e => e.k === 'og' && ogConSub.has(e.v))) k = 'c2';
       let r = null;
       if (!ents.length && !k && !meses.length && !comparar && !proy && !cadena && !ordenRiesgo) r = rBusqueda(n);
       if (r) {}
@@ -2977,24 +3105,51 @@ function crearAsistente(T){
 }
 
 (function(){
+  var ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 15.5a2 2 0 0 1-2 2H8l-4 3.5V5.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/><path d="M8.5 13V10.5M12 13V7.5M15.5 13V9"/></svg>';
+  var SV = function(p){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>'; };
+  var TARJETAS = [
+    {c:'c1', t:'Resumen del pliego', s:'PIM, devengado y avance', q:'Resumen del pliego', i:SV('<circle cx="12" cy="12" r="9"/><path d="M12 12l4-3"/><path d="M12 7v1M7 12h1M16 12h1"/>')},
+    {c:'c2', t:'Menor avance', s:'Unidades más rezagadas', q:'Unidades con menor avance', i:SV('<path d="M4 20h16"/><path d="M7 16V8M12 16v-4M17 16V5"/>')},
+    {c:'c3', t:'Evolución mensual', s:'Devengado vs. POI', q:'Evolución mensual del pliego', i:SV('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>')},
+    {c:'c4', t:'Proyección de cierre', s:'Ritmo y saldo en riesgo', q:'Proyección de cierre del pliego', i:SV('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>')},
+    {c:'c5', t:'Comparar cortes', s:'Avance desde el anterior', q:'¿Cuánto avanzó desde el corte anterior?', i:SV('<path d="M7 7h11l-3-3M17 17H6l3 3"/>')},
+    {c:'c6', t:'Cómo usar el tablero', s:'Filtros y descargas', q:'¿Qué secciones tiene el tablero?', i:SV('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>')}
+  ];
+  function guardar(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
+  function leer(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
+
   function iniciar(T){
     if (!T || !T.DATA || document.querySelector('.atb-toggle')) return;
     var A = crearAsistente(T);
     var btn = document.createElement('button');
     btn.className = 'atb-toggle'; btn.type = 'button';
-    btn.setAttribute('aria-label', 'Abrir asistente del tablero'); btn.title = 'Asistente del tablero';
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    btn.setAttribute('aria-label', 'Abrir asistente del tablero'); btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<span class="atb-ico">' + ICO + '</span><span class="atb-lbl">Pregúntale al tablero</span>' +
+      '<svg class="atb-x2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    var tz = document.createElement('div');
+    tz.className = 'atb-teaser'; tz.setAttribute('role', 'status');
+    tz.innerHTML = '<b>👋 ¿Necesitas una cifra?</b>Pregúntame por cualquier unidad, genérica o proyecto.<button type="button" aria-label="Ocultar mensaje">×</button>';
     var p = document.createElement('div');
     p.className = 'atb-panel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Asistente del tablero');
-    p.innerHTML = '<div class="atb-head"><div><b>Asistente del tablero</b><span>Datos al ' + A.FECHA + '</span></div><button class="atb-x" type="button" aria-label="Cerrar">×</button></div>' +
+    p.innerHTML = '<div class="atb-head"><div class="atb-av">' + ICO + '</div><div><b>Asistente del tablero</b><span><i></i>Datos al ' + A.FECHA + (T.HORA_CORTE ? ', ' + T.HORA_CORTE : '') + '</span></div>' +
+      '<div class="atb-hb"><button class="atb-home" type="button" title="Inicio" aria-label="Volver al inicio">' + SV('<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>') + '</button>' +
+      '<button class="atb-x" type="button" title="Cerrar" aria-label="Cerrar">' + SV('<path d="M6 6l12 12M18 6L6 18"/>') + '</button></div></div>' +
       '<div class="atb-msgs" aria-live="polite"></div>' +
-      '<form class="atb-form"><input class="atb-in" type="text" placeholder="Escribe tu pregunta…" aria-label="Tu pregunta" autocomplete="off"><button class="atb-send" type="submit">Enviar</button></form>' +
-      '<div class="atb-pie">Respuestas calculadas con los datos del tablero (todo el pliego, sin los filtros aplicados).</div>';
-    document.body.appendChild(btn); document.body.appendChild(p);
+      '<form class="atb-form"><input class="atb-in" type="text" placeholder="Escribe tu pregunta…" aria-label="Tu pregunta" autocomplete="off"><button class="atb-send" type="submit" aria-label="Enviar">' + SV('<path d="M5 12h14M13 6l6 6-6 6"/>') + '</button></form>' +
+      '<div class="atb-pie">Calculado con los datos del tablero (todo el pliego, sin los filtros aplicados).</div>';
+    document.body.appendChild(tz); document.body.appendChild(btn); document.body.appendChild(p);
     var msgs = p.querySelector('.atb-msgs'), inp = p.querySelector('.atb-in'), iniciado = false;
 
     function abajo(){ msgs.scrollTop = msgs.scrollHeight; }
     function quitarChips(){ msgs.querySelectorAll('.atb-chips').forEach(function(c){ c.remove(); }); }
+    function bienvenida(){
+      quitarChips();
+      var w = document.createElement('div'); w.className = 'atb-bien';
+      w.innerHTML = '<div class="atb-hola"><b>¡Hola! 👋</b> Te doy cifras del corte y te explico cómo usar el tablero. Elige una opción o escribe, por ejemplo, <i>"¿Cómo va la SITF?"</i></div>' +
+        '<div class="atb-grid">' + TARJETAS.map(function(c, i){ return '<button type="button" class="atb-card" data-i="' + i + '"><span class="ci ' + c.c + '">' + c.i + '</span><b>' + c.t + '</b><small>' + c.s + '</small></button>'; }).join('') + '</div>';
+      w.querySelectorAll('.atb-card').forEach(function(b){ b.onclick = function(){ enviar(TARJETAS[+b.getAttribute('data-i')].q); }; });
+      msgs.appendChild(w); w.scrollIntoView({block: 'start'});
+    }
     function bot(html, chips){
       var d = document.createElement('div'); d.className = 'atb-m bot'; d.innerHTML = html; msgs.appendChild(d);
       if (chips && chips.length){
@@ -3008,24 +3163,36 @@ function crearAsistente(T){
       texto = String(texto || '').trim(); if (!texto) return;
       quitarChips();
       var u = document.createElement('div'); u.className = 'atb-m yo'; u.textContent = texto; msgs.appendChild(u);
-      var e = document.createElement('div'); e.className = 'atb-esc'; e.textContent = 'Escribiendo…'; msgs.appendChild(e); abajo();
+      var e = document.createElement('div'); e.className = 'atb-esc'; e.setAttribute('aria-label', 'Escribiendo'); e.innerHTML = '<i></i><i></i><i></i>'; msgs.appendChild(e); abajo();
       setTimeout(function(){
         e.remove();
         var r;
         try { r = A.responder(texto); } catch (err) { console.warn(err); r = {html: 'Tuve un problema al calcular esa respuesta 😕. ¿Puedes reformularla?', chips: A.SUGERENCIAS}; }
         bot(r.html, r.chips);
-      }, 280);
+      }, 420);
     }
+    function ocultarTeaser(){ tz.classList.remove('ver'); guardar('atb_teaser_visto', '1'); }
     function abrir(){
-      p.classList.add('abierto'); btn.setAttribute('aria-label', 'Cerrar asistente del tablero');
-      if (!iniciado){ iniciado = true; var r = A.responder('hola'); bot(r.html, r.chips); }
-      setTimeout(function(){ inp.focus(); }, 50);
+      ocultarTeaser();
+      p.classList.add('abierto'); btn.classList.add('abierto');
+      btn.setAttribute('aria-label', 'Cerrar asistente del tablero'); btn.setAttribute('aria-expanded', 'true');
+      if (!iniciado){ iniciado = true; bienvenida(); }
+      setTimeout(function(){ inp.focus(); }, 60);
     }
-    function cerrar(){ p.classList.remove('abierto'); btn.setAttribute('aria-label', 'Abrir asistente del tablero'); btn.focus(); }
+    function cerrar(){
+      p.classList.remove('abierto'); btn.classList.remove('abierto');
+      btn.setAttribute('aria-label', 'Abrir asistente del tablero'); btn.setAttribute('aria-expanded', 'false'); btn.focus();
+    }
     btn.onclick = function(){ p.classList.contains('abierto') ? cerrar() : abrir(); };
     p.querySelector('.atb-x').onclick = cerrar;
+    p.querySelector('.atb-home').onclick = bienvenida;
     p.addEventListener('keydown', function(ev){ if (ev.key === 'Escape') cerrar(); });
     p.querySelector('.atb-form').addEventListener('submit', function(ev){ ev.preventDefault(); var t = inp.value; inp.value = ''; enviar(t); });
+    tz.onclick = function(ev){ if (ev.target.tagName === 'BUTTON'){ ev.stopPropagation(); ocultarTeaser(); } else abrir(); };
+    if (!leer('atb_teaser_visto')){
+      setTimeout(function(){ if (!p.classList.contains('abierto')) tz.classList.add('ver'); }, 1800);
+      setTimeout(function(){ if (tz.classList.contains('ver')) ocultarTeaser(); }, 12000);
+    }
   }
   if (window.__TABLERO__) iniciar(window.__TABLERO__);
   else window.addEventListener('tablero:listo', function(){ iniciar(window.__TABLERO__); }, {once: true});

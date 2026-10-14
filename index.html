@@ -449,6 +449,8 @@ const FRAC = Math.min(1, FD / new Date(FY, LAST+1, 0).getDate());   /* fracción
 const MONTHS_LEFT = (1 - FRAC) + (11 - LAST);
 function fnv(s){ let h = 0x811c9dc5; for (const b of new TextEncoder().encode(s)){ h ^= b; h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8,'0'); }
 DATA.forEach(r => { r.h = fnv([r.og,r.uo,r.ge,r.fu,r.pr,r.ti,r.ca,r.re,r.oe,r.c2,r.cl].join('|')); });
+window.__TABLERO__ = {DATA, HISTORIAL, FECHA_CORTE, HORA_CORTE, LAST, M3, MONTHS_LEFT};   /* lo usa el asistente del tablero */
+window.dispatchEvent(new Event('tablero:listo'));
 
 const state = { f:{}, measure:'pim', groupBy:'uo', invGroup:'c2', base:null, tblGroup:'uo', sort:{key:'pim', dir:-1}, q:'' };
 FILTERS.forEach(f => state.f[f.k] = new Set());
@@ -2503,5 +2505,532 @@ fillBaseSel();
 update();
 })();
 </script>
+<!-- ===== Asistente del tablero (local, sin IA ni servicios externos) ===== -->
+<style>
+.atb-toggle{position:fixed;right:20px;bottom:20px;z-index:9998;width:56px;height:56px;border-radius:50%;border:0;background:var(--navy,#16324F);color:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(20,34,56,.28);display:flex;align-items:center;justify-content:center;transition:transform .15s,background .15s}
+.atb-toggle:hover{background:var(--navy2,#22476E);transform:translateY(-2px)}
+.atb-toggle:focus-visible{outline:3px solid var(--teal,#12A08A);outline-offset:2px}
+.atb-toggle svg{width:26px;height:26px}
+.atb-panel{position:fixed;right:20px;bottom:88px;z-index:9999;width:370px;height:min(560px,calc(100vh - 120px));background:#fff;border-radius:14px;box-shadow:0 12px 36px rgba(20,34,56,.28);display:none;flex-direction:column;overflow:hidden;font-family:var(--font,system-ui,sans-serif);font-size:14px;color:var(--ink,#142238)}
+.atb-panel.abierto{display:flex}
+.atb-head{background:var(--navy,#16324F);color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px}
+.atb-head b{display:block;font-size:15px}
+.atb-head span{display:block;font-size:12px;opacity:.8}
+.atb-x{margin-left:auto;background:transparent;border:0;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px}
+.atb-x:hover{background:rgba(255,255,255,.15)}
+.atb-msgs{flex:1;overflow-y:auto;padding:12px;background:var(--bg,#F2F5F9);display:flex;flex-direction:column;gap:8px}
+.atb-m{max-width:88%;padding:9px 12px;border-radius:12px;line-height:1.45;word-wrap:break-word}
+.atb-m.bot{align-self:flex-start;background:#fff;border:1px solid var(--line,#E2E8F0);border-bottom-left-radius:4px}
+.atb-m.yo{align-self:flex-end;background:var(--navy,#16324F);color:#fff;border-bottom-right-radius:4px;white-space:pre-wrap}
+.atb-m ul{margin:6px 0;padding-left:18px}
+.atb-m li{margin:2px 0}
+.atb-m small{color:var(--muted,#5A6B82)}
+.atb-chips{display:flex;flex-wrap:wrap;gap:6px;align-self:flex-start;max-width:96%}
+.atb-chip{border:1px solid var(--teal,#12A08A);color:#0E7C6B;background:#fff;border-radius:999px;padding:5px 10px;font-size:12.5px;cursor:pointer;text-align:left}
+.atb-chip:hover{background:#E7F6F3}
+.atb-esc{align-self:flex-start;color:var(--muted,#5A6B82);font-size:12px;padding:2px 4px}
+.atb-form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line,#E2E8F0);background:#fff}
+.atb-in{flex:1;border:1px solid var(--line,#E2E8F0);border-radius:10px;padding:9px 11px;font:inherit;outline:none}
+.atb-in:focus{border-color:var(--navy2,#22476E)}
+.atb-send{border:0;background:var(--teal,#12A08A);color:#fff;border-radius:10px;padding:0 14px;font-weight:600;cursor:pointer}
+.atb-send:hover{background:#0E8A76}
+.atb-pie{font-size:11px;color:var(--muted,#5A6B82);padding:0 12px 8px;background:#fff}
+@media (max-width:480px){.atb-panel{right:8px;left:8px;width:auto;bottom:84px;height:calc(100vh - 100px)}}
+@media print{.atb-toggle,.atb-panel{display:none !important}}
+</style>
+<script>
+function crearAsistente(T){
+  'use strict';
+  const D = T.DATA, H = T.HISTORIAL || [], LAST = T.LAST, M3 = T.M3, ML = T.MONTHS_LEFT;
+  const BOLSA = new Set(['OPP (Otros)']);
+  const MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
+  const MESN = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'];
+  const DIM = {og:'Órgano', uo:'Unidad orgánica', se:'Sectorista', ge:'Genérica de gasto', fu:'Fuente de financiamiento',
+    pr:'Programa presupuestal', ti:'Tipo de gasto', ca:'Categoría de gasto', re:'Tipo de partida', oe:'Objetivo estratégico',
+    ti2:'Tipo de obligación', c2:'Proyecto o línea', ac:'Actividad', pj:'CUI', cl:'Clasificador'};
+  const PLURAL = {og:'órganos', uo:'unidades orgánicas', se:'sectoristas', ge:'genéricas de gasto', fu:'fuentes', pr:'programas',
+    ti:'tipos de gasto', ca:'categorías', re:'tipos de partida', oe:'objetivos estratégicos', ti2:'tipos', c2:'proyectos o líneas', ac:'actividades', pj:'CUI', cl:'clasificadores'};
+
+  /* ---------- utilidades ---------- */
+  const sinTilde = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const norm = s => sinTilde(s).toLowerCase().replace(/\s+/g, ' ').trim();
+  const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const sum = a => a.reduce((x, y) => x + (Number(y) || 0), 0);
+  const m1 = n => (n / 1e6).toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+  const fM = n => 'S/ ' + (Math.abs(n) >= 1e6 ? m1(n) + ' M' : Math.round(n).toLocaleString('en-US'));
+  const fML = n => Math.abs(n) >= 1e6 ? 'S/ ' + m1(n) + ' millones' : 'S/ ' + Math.round(n).toLocaleString('en-US');
+  const pct = (a, b) => b ? (100 * a / b).toFixed(1) + ' %' : '—';
+  const sgn = n => (n >= 0 ? '+' : '−') + fM(Math.abs(n)).replace('S/ ', 'S/ ');
+  const [FY, FMo, FD] = T.FECHA_CORTE.split('-').map(Number);
+  const FECHA = String(FD).padStart(2, '0') + '/' + String(FMo).padStart(2, '0') + '/' + FY;
+  const semaforo = r => r >= 0.70 ? '🟢' : r >= 0.50 ? '🟡' : '🔴';
+  const uniq = k => [...new Set(D.map(r => r[k]).filter(v => v != null && v !== '' && v !== 'None'))];
+
+  const agg = rows => {
+    const t = {n: rows.length, pia: 0, pim: 0, ce: 0, co: 0, dv: 0, r3: 0, dvm: Array(12).fill(0), poi: Array(12).fill(0)};
+    for (const r of rows){
+      t.pia += r.pia || 0; t.pim += r.pim || 0; t.ce += r.ce || 0; t.co += r.co || 0;
+      for (let m = 0; m < 12; m++){ t.dvm[m] += (r.dv || [])[m] || 0; t.poi[m] += (r.po || [])[m] || 0; }
+    }
+    t.dv = sum(t.dvm); t.r3 = sum(M3.map(m => t.dvm[m]));
+    return t;
+  };
+  const agrupar = (rows, k) => {
+    const m = new Map();
+    for (const r of rows){ const key = (r[k] == null || r[k] === '' || r[k] === 'None') ? '(sin dato)' : r[k]; if (!m.has(key)) m.set(key, []); m.get(key).push(r); }
+    return [...m].map(([k2, rs]) => Object.assign(agg(rs), {k: k2, rows: rs}));
+  };
+  const riesgo = t => { const rit = t.r3 / M3.length; return Math.max(0, t.pim - Math.max(t.dv + rit * ML, t.dv)); };
+
+  /* ---------- diccionarios de entidades ---------- */
+  const OG = new Set(uniq('og')), UO = new Set(uniq('uo'));
+  const ogConSub = new Set([...OG].filter(o => new Set(D.filter(r => r.og === o).map(r => r.uo)).size > 1));
+  const SIGLAS = [...new Set([...OG, ...UO])].sort((a, b) => b.length - a.length);
+  const SECT = uniq('se');
+  const ALIAS = [
+    {k: 'ge', v: 'Bienes y servicios', re: /\bbienes y servicios\b|\bbys\b|\b2\.3\b/},
+    {k: 'ge', v: 'Personal y obligaciones sociales', re: /\bpersonal y obligaciones\b|\bgenerica (de )?personal\b|\b2\.1\b/},
+    {k: 'ge', v: 'Adquisición de activos no financieros', re: /\bactivos no financieros\b|\badquisicion de activos\b|\b2\.6\b/},
+    {k: 'ge', v: 'Otros gastos', re: /\botros gastos\b|\b2\.5\b/},
+    {k: 'fu', v: 'Recursos ordinarios', re: /\brecursos ordinarios\b|\bro\b/},
+    {k: 'fu', v: 'Recursos directamente recaudados', re: /\bdirectamente recaudados\b|\brdr\b/},
+    {k: 'pr', v: '0148 Reducción del tiempo, inseguridad y costo ambiental', re: /\b0148\b|\bprograma 148\b|\breduccion del tiempo\b/},
+    {k: 'pr', v: '9001 Acciones centrales', re: /\b9001\b|\bacciones centrales\b/},
+    {k: 'pr', v: '9002 Asignaciones que no resultan en productos', re: /\b9002\b|\bapnop\b|\basignaciones que no resultan\b/},
+    {k: 'ca', v: 'Gastos corrientes', re: /\bgastos? corrientes?\b/},
+    {k: 'ca', v: 'Gastos de capital', re: /\bgastos? de capital\b/},
+    {k: 're', v: 'Libre', re: /\bpartidas? libres?\b/},
+    {k: 're', v: 'Restringida', re: /\brestringid[ao]s?\b/},
+    {k: 'ti2', v: 'OC', re: /\bobligaciones contractuales\b/},
+    {k: 'ti2', v: 'GA', re: /\bgestion atu\b/},
+    {k: 'oe', v: 'OEI.01 Servicios del sistema de transporte', re: /\boei\.? ?0?1\b|\bservicios del sistema de transporte\b/},
+    {k: 'oe', v: 'OEI.02 Infraestructura del sistema de transporte', re: /\boei\.? ?0?2\b|\binfraestructura del sistema\b/},
+    {k: 'oe', v: 'OEI.03 Gestión institucional', re: /\boei\.? ?0?3\b|\bgestion institucional\b/},
+    {k: 'oe', v: 'OEI.04 Gestión del riesgo de desastres', re: /\boei\.? ?0?4\b|\bgestion del riesgo de desastres\b/},
+    {k: 'ac', v: 'Pago anual por obras (PAO)', re: /\bpao\b|\bpago anual por obras\b/},
+    {k: 'ac', v: 'Estudios de pre-inversión', re: /\bpre-? ?inversion\b/},
+    {k: 'ac', v: 'Expediente técnico', re: /\bexpedientes? tecnicos?\b/},
+    {k: 'ac', v: 'Liberación y saneamiento de áreas', re: /\bliberacion\b|\bsaneamiento de areas\b/},
+    {k: 'ac', v: 'Supervisión y liquidación de obras', re: /\bsupervision\b/},
+    {k: 'ac', v: 'Solución de controversias', re: /\bcontroversias\b/},
+    {k: 'ac', v: 'Rehabilitación de vía arterial', re: /\brehabilitacion\b|\bvia arterial\b/}
+  ].filter(a => uniq(a.k).includes(a.v));
+  const C2 = uniq('c2').filter(v => !['Otros'].includes(v)).map(v => ({v, n: norm(v.replace(/^Inversiones - /, '')), corto: v.replace(/[^A-Za-z]/g, '').length <= 4 && v === v.toUpperCase()}))
+    .sort((a, b) => b.n.length - a.n.length);
+  const PJ = new Set(uniq('pj').map(String));
+
+  function detectar(orig){
+    let w = ' ' + sinTilde(orig).replace(/[¿?¡!,;:]/g, ' ') + ' ';
+    let n = norm(w);
+    const ents = [], quita = (re) => { w = w.replace(re, ' '); n = norm(w); };
+    const sinNombre = [];
+    // CUI
+    for (const m of (n.match(/\b2\d{6}\b/g) || [])) if (PJ.has(m)) { ents.push({k: 'pj', v: m}); quita(new RegExp('\\b' + m + '\\b', 'g')); }
+    // clasificador por código
+    for (const m of (n.match(/\b2(\.\d+){3,}\b/g) || [])) { if (D.some(r => String(r.cl).startsWith(m))) { ents.push({k: 'cl', v: m, pre: true}); quita(new RegExp(escRe(m), 'g')); } }
+    // alias de texto
+    for (const a of ALIAS){
+      if (a.re.test(n)){
+        if (a.k === 'fu' && a.v === 'Recursos ordinarios' && !/\brecursos ordinarios\b/.test(n) && !/\bRO\b/.test(w)) continue;
+        ents.push({k: a.k, v: a.v}); n = n.replace(a.re, ' '); }
+    }
+    if (/\bdonaciones\b/.test(n)) ents.push({k: /\bfuente\b/.test(n) ? 'fu' : 'ge', v: 'Donaciones y transferencias'});
+    if (/\binversion(es)?\b/.test(n) && !/\b(pre-?inversion|por inversion)\b/.test(n)) ents.push({k: 'ti', v: 'Inversiones', suave: true});
+    if (/\bactividades\b/.test(n) && !/\bpor actividad(es)?\b/.test(n)) ents.push({k: 'ti', v: 'Actividades', suave: true});
+    // proyectos / líneas
+    for (const c of C2){
+      const ok = c.corto ? new RegExp('(^|[^A-Za-z0-9])' + escRe(c.v) + '($|[^A-Za-z0-9])').test(w) : new RegExp('(^|[^a-z0-9])' + escRe(c.n) + '($|[^a-z0-9])').test(n);
+      if (ok){ ents.push({k: 'c2', v: c.v}); if (!c.corto) n = n.replace(c.n, ' '); else w = w.replace(c.v, ' '); }
+    }
+    if (ents.some(e => e.k === 'c2' && e.v.startsWith('Inversiones'))) { for (let i = ents.length - 1; i >= 0; i--) if (ents[i].k === 'ti' && ents[i].suave) ents.splice(i, 1); }
+    if (/\bpkt\b/i.test(w) && uniq('ac').some(v => /PKT/.test(v))) ents.push({k: 'ac', v: uniq('ac').find(v => /PKT/.test(v)), alt: true});
+    // siglas de órganos / unidades
+    for (const s of SIGLAS){
+      const corto = s.replace(/[^A-Za-z]/g, '').length <= 3;
+      const re = new RegExp('(^|[^A-Za-z0-9])' + escRe(s) + '($|[^A-Za-z0-9])', corto ? '' : 'i');
+      if (re.test(w)){
+        let k = UO.has(s) && !OG.has(s) ? 'uo' : OG.has(s) && !UO.has(s) ? 'og' : (ogConSub.has(s) && !/\bunidad\b/.test(n) ? 'og' : 'uo');
+        ents.push({k, v: s}); w = w.replace(new RegExp(escRe(s), corto ? 'g' : 'gi'), ' ');
+      }
+    }
+    n = norm(w);
+    // sectoristas
+    for (const s of SECT){
+      const partes = norm(s).split(' ').filter(p => p.length >= 4);
+      if (partes.some(p => new RegExp('\\b' + p + '\\b').test(n))) ents.push({k: 'se', v: s});
+    }
+    // siglas escritas en mayúscula que no existen
+    for (const m of (w.match(/\b[A-Z]{2,6}\b/g) || [])) if (!['PIM','PIA','POI','PDF','PPT','CSV','CUI','SIAF','MPP','ATU','OEI','RO','RDR','OC','GA','PAO','PKT','BYS','JSON'].includes(m)) sinNombre.push(m);
+    return {ents, sinNombre};
+  }
+
+  /* ---------- intención ---------- */
+  function mesesDe(n){
+    const out = [];
+    MESN.forEach((m, i) => { if (new RegExp('\\b' + m + '\\b').test(n)) out.push(i); });
+    if (/\bseptiembre\b|\bsetiembre\b/.test(n) && !out.includes(8)) out.push(8);
+    if (/\b(este mes|mes actual|mes en curso)\b/.test(n)) out.push(LAST);
+    if (/\bmes pasado|mes anterior\b/.test(n) && LAST > 0) out.push(LAST - 1);
+    return [...new Set(out)].sort((a, b) => a - b);
+  }
+  function dimDe(n){
+    const P = [
+      ['uo', /\bpor unidad(es)?( organicas?)?\b|\bque unidades\b|\bcuales unidades\b|\bunidades( organicas)? (con|que|mas|de mayor|de menor|van|estan|tienen)\b|\bunidades\b.*\b(menor|mayor|atrasad|rezagad)/],
+      ['og', /\bpor organos?\b|\bque organos\b|\borganos (con|que|mas|van|estan|tienen)\b/],
+      ['se', /\bpor sectorista\b|\bque sectoristas\b|\bsectoristas (con|que|mas|van|estan|tienen)\b|\bsectoristas\b.*\b(menor|mayor)/],
+      ['ge', /\bpor generica\b|\bgenericas\b/],
+      ['fu', /\bpor fuente\b|\bfuentes\b/],
+      ['pr', /\bpor programa\b|\bprogramas presupuestales\b/],
+      ['oe', /\bpor (oei|objetivo)\b|\bobjetivos estrategicos\b/],
+      ['ac', /\bpor actividad(es)?\b/],
+      ['c2', /\bpor (proyecto|linea|concepto)s?\b|\bque proyectos\b|\bproyectos (con|que|mas|van|estan|tienen)\b|\bconceptos\b/],
+      ['cl', /\bpor clasificador(es)?\b|\bclasificadores\b/],
+      ['pj', /\bpor cui\b/],
+      ['ca', /\bpor categoria\b/],
+      ['ti2', /\bpor tipo de obligacion\b/]
+    ];
+    for (const [k, re] of P) if (re.test(n)) return k;
+    return null;
+  }
+
+  /* ---------- guía de uso y glosario ---------- */
+  const GUIA = [
+    {t: 'Filtros', k: /\bfiltr|\blimpiar\b|\bseleccion/, r: 'Los <b>filtros</b> están en la parte superior: órgano, unidad orgánica, sectorista, genérica, fuente, programa, tipo de gasto y tipo de partida. Puedes elegir varios valores a la vez; todo el tablero se recalcula. El botón <b>Limpiar filtros</b> los quita.'},
+    {t: 'Reporte de sectoristas', k: /\bsectorist.*\b(pdf|reporte|hoja)|\b(pdf|reporte).*sectorist/, r: 'Pulsa <b>Reporte de sectoristas (PDF)</b>: genera una hoja por sectorista con sus unidades, avance acumulado y mensual, saldo en riesgo y alertas. En la ventana de impresión elige <b>Guardar como PDF</b>.'},
+    {t: 'Resumen ejecutivo (PDF)', k: /\bresumen ejecutivo\b|\bpdf\b(?!.*sectorist)|\bimprimir\b/, r: 'Pulsa <b>Resumen ejecutivo (PDF)</b>. Se abre la ventana de impresión: en destino elige <b>Guardar como PDF</b>. Usa los filtros que tengas aplicados.'},
+    {t: 'Presentación PPT', k: /\bppt\b|\bpowerpoint\b|\bpresentacion\b|\bdiapositiva/, r: 'Pulsa <b>Descargar PPT</b>: arma una presentación ejecutiva de 10 diapositivas con los datos del corte. Necesita conexión a internet y tarda unos segundos.'},
+    {t: 'Descargar CSV', k: /\bcsv\b|\bexcel\b|\bexportar\b|\bdescargar (la )?tabla\b/, r: 'En la sección <b>Detalle</b>, pulsa <b>Descargar CSV</b> para exportar la tabla tal como la ves (con su agrupación y filtros). Se abre directamente en Excel.'},
+    {t: 'Tabla de detalle', k: /\bdetalle\b|\bagrupar\b|\btabla\b|\bcolumnas?\b/, r: 'La sección <b>Detalle</b> tiene el selector <b>Agrupar por</b> (unidad orgánica, órgano, proyecto o línea, actividad) y botones para mostrar PIM, certificado, comprometido o devengado.'},
+    {t: 'Comparar cortes', k: /\bcomparar\b|\bcorte anterior\b|\bvariacion\b|\bcargar corte\b|\bdescargar corte\b|\bjson\b/, r: 'En <b>Avance desde el corte anterior y cuellos de botella</b> usa el selector <b>Comparar con</b> para elegir un corte previo y ver cuánto variaron el devengado y el comprometido. Con <b>Descargar corte actual</b> guardas una foto de los datos y con <b>Cargar corte (.json)</b> la vuelves a usar.'},
+    {t: 'Formato 12-B', k: /\b12-?b\b|\bavance fisico\b|\bportal de seguimiento\b/, r: 'En la sección <b>Inversiones</b>, pulsa <b>Cargar formato 12-B (PDF)</b> y sube el PDF del Portal de Seguimiento (o un Excel/CSV con CUI y avance físico). El tablero agrega el avance físico de cada inversión.'},
+    {t: 'Proyección de cierre', k: /\bproyeccion\b(?!.*\b(de|del|para)\b)|\bcomo se calcula.*(cierre|riesgo)|\bque es el saldo en riesgo\b/, r: 'La <b>Proyección de cierre a diciembre</b> supone que se mantiene el ritmo promedio de los últimos 3 meses cerrados. El <b>saldo en riesgo</b> es la parte del PIM que no se devengaría a ese ritmo. Es una estimación simple, no oficial.'},
+    {t: 'Colores y alertas', k: /\bcolor|\bsemaforo\b|\balertas?\b|\bverde\b|\brojo\b|\bambar\b|\bumbral/, r: 'Colores del avance (devengado/PIM): 🟢 70 % o más, 🟡 entre 50 % y 70 %, 🔴 menos de 50 %. La sección <b>Alertas de ejecución</b> marca alertas críticas, de atención e informativas según los filtros aplicados.'},
+    {t: 'Fuente de los datos', k: /\bfuente de (los )?datos\b|\bde donde (salen|vienen)\b|\bactualiza|\bsiaf\b|\bboton datos\b|\bbase de datos\b/, r: 'Los datos vienen del <b>SIAF-MPP</b> y se actualizan con cada corte diario; la fecha y hora del corte aparecen en el encabezado. El botón <b>Datos</b>, al final de la página, abre la carpeta con las bases fuente.'},
+    {t: 'Secciones del tablero', k: /\bsecciones\b|\bque (muestra|tiene|contiene) el tablero\b|\bcomo (uso|usar|funciona) el tablero\b|\bayuda\b|\bguia\b/, r: 'El tablero tiene: indicadores principales, <b>Lectura clave</b>, <b>Alertas</b>, <b>Evolución mensual</b>, <b>Proyección de cierre</b>, <b>Ejecución por unidad</b>, <b>Avance desde el corte anterior</b>, <b>Estructura del gasto</b>, <b>Inversiones</b> y <b>Detalle</b>. Arriba están los filtros y los botones de descarga.'}
+  ];
+  const GLOSARIO = [
+    {k: /\bpia\b/, r: 'El <b>PIA</b> (Presupuesto Institucional de Apertura) es el presupuesto aprobado al inicio del año.'},
+    {k: /\bpim\b/, r: 'El <b>PIM</b> (Presupuesto Institucional Modificado) es el presupuesto vigente, luego de las modificaciones del año. El avance se mide contra el PIM.'},
+    {k: /\bcertific/, r: 'La <b>certificación</b> garantiza que hay crédito presupuestal disponible para un gasto. Es la primera etapa de la cadena: certificado → comprometido → devengado.'},
+    {k: /\bcomprom/, r: 'El <b>compromiso</b> es cuando se asume formalmente la obligación de pago (por ejemplo, al firmar un contrato u orden).'},
+    {k: /\bdevengad/, r: 'El <b>devengado</b> reconoce la obligación de pago luego de recibir el bien o servicio. Es la medida de ejecución que usa el tablero.'},
+    {k: /\bgirad/, r: 'El <b>girado</b> es el pago efectivamente emitido después del devengado.'},
+    {k: /\bavance\b/, r: 'El <b>avance</b> es devengado ÷ PIM. En el tablero: 🟢 70 % o más, 🟡 50–70 %, 🔴 menos de 50 %.'},
+    {k: /\bsaldo en riesgo\b|\briesgo\b/, r: 'El <b>saldo en riesgo</b> es la parte del PIM que no se devengaría a diciembre si se mantiene el ritmo de los últimos 3 meses cerrados. Es una estimación simple.'},
+    {k: /\bpoi\b/, r: 'El <b>POI</b> es la programación mensual de la ejecución. El tablero compara el devengado de cada mes con lo programado en el POI.'},
+    {k: /\bsectorista\b/, r: 'El <b>sectorista</b> es el especialista que hace seguimiento presupuestal a un grupo de unidades orgánicas.'},
+    {k: /\bobligaciones contractuales\b|\b(oc|ga)\b/, r: '<b>OC</b> son las obligaciones contractuales (concesiones, PAO, PKT, etc.) y <b>GA</b> el gasto de gestión ATU.'},
+    {k: /\bcorte\b/, r: 'Un <b>corte</b> es la foto diaria de la base SIAF con fecha y hora. El tablero guarda los cortes anteriores para comparar.'}
+  ];
+
+  /* ---------- armado de respuestas ---------- */
+  const filtrar = ents => {
+    const porDim = {};
+    const conc = ents.filter(e => e.k === 'c2' || e.k === 'ac');
+    const unir = ents.some(e => e.alt);
+    for (const e of ents) if (!(unir && (e.k === 'c2' || e.k === 'ac'))) (porDim[e.k] = porDim[e.k] || []).push(e);
+    return D.filter(r => Object.entries(porDim).every(([k, es]) => es.some(e => e.pre ? String(r[k]).startsWith(e.v) : String(r[k]) === String(e.v)))
+      && (!unir || conc.some(e => String(r[e.k]) === String(e.v))));
+  };
+  const etiqueta = (ents, inicio) => {
+    if (!ents.length) return (inicio ? 'E' : 'e') + 'l pliego ATU';
+    return ents.filter(e => !e.alt).map(e => {
+      if (e.k === 'og' && ogConSub.has(e.v)) return '<b>' + esc(e.v) + '</b> (órgano)';
+      if (e.k === 'pj') return 'el CUI <b>' + esc(e.v) + '</b>';
+      if (e.k === 'cl') return 'el clasificador <b>' + esc(e.v) + '</b>';
+      return '<b>' + esc(e.v) + '</b>';
+    }).join(' · ');
+  };
+  const txtEtiq = ents => ents.filter(e => !e.alt).map(e => e.v).join(' ');
+  const de = ents => { const t = txtEtiq(ents); return t ? 'de ' + t : 'del pliego'; };
+  const deE = ents => ents.length ? 'de ' + etiqueta(ents) : 'del pliego ATU';
+  const enE = ents => ents.length ? 'en ' + etiqueta(ents) : 'en el pliego ATU';
+  const lista = items => '<ul>' + items.map(i => '<li>' + i + '</li>').join('') + '</ul>';
+
+  function rFicha(ents, rows){
+    const t = agg(rows), av = t.pim ? t.dv / t.pim : 0;
+    const L = txtEtiq(ents);
+    return {
+      html: '📊 ' + etiqueta(ents, true) + ' al ' + FECHA + ':' + lista([
+        'PIM: <b>' + fML(t.pim) + '</b>',
+        'Devengado: <b>' + fML(t.dv) + '</b> · avance <b>' + pct(t.dv, t.pim) + '</b> ' + semaforo(av),
+        'Comprometido: ' + fML(t.co) + ' (' + pct(t.co, t.pim) + ' del PIM)',
+        'Saldo por devengar: ' + fML(t.pim - t.dv)
+      ]) + '¿Quieres ver su evolución mensual o la proyección de cierre?',
+      chips: ['Evolución mensual ' + de(ents), 'Proyección de cierre ' + de(ents), ents.length ? 'Comparar ' + L + ' con el corte anterior' : 'Unidades con menor avance']
+    };
+  }
+
+  function rRanking(ents, rows, k, orden){
+    let g = agrupar(rows, k).filter(x => x.pim > 0);
+    const excl = (k === 'uo' || k === 'og') && g.some(x => BOLSA.has(x.k));
+    if (orden) g = g.filter(x => !BOLSA.has(x.k));
+    const chicos = orden === 'asc' ? g.filter(x => x.pim < 100000).length : 0;
+    if (chicos) g = g.filter(x => x.pim >= 100000);
+    const av = x => x.pim ? x.dv / x.pim : 0;
+    let titulo;
+    if (orden === 'asc'){ g.sort((a, b) => av(a) - av(b)); titulo = 'con <b>menor avance</b>'; }
+    else if (orden === 'desc'){ g.sort((a, b) => av(b) - av(a)); titulo = 'con <b>mayor avance</b>'; }
+    else if (orden === 'saldo'){ g.sort((a, b) => (b.pim - b.dv) - (a.pim - a.dv)); titulo = 'con <b>mayor saldo por devengar</b>'; }
+    else if (orden === 'riesgo'){ g.forEach(x => x.rk = riesgo(x)); g = g.filter(x => x.rk > 0).sort((a, b) => b.rk - a.rk); titulo = 'con <b>mayor saldo en riesgo</b>'; }
+    else { g.sort((a, b) => b.pim - a.pim); titulo = 'por PIM'; }
+    const max = orden ? 6 : 8;
+    const filas = g.slice(0, max).map(x => '<b>' + esc(x.k) + '</b>: ' + (orden === 'riesgo'
+      ? fM(x.rk) + ' en riesgo (' + pct(x.rk, x.pim) + ' de su PIM)'
+      : orden === 'saldo' ? fM(x.pim - x.dv) + ' por devengar · avance ' + pct(x.dv, x.pim)
+      : pct(x.dv, x.pim) + ' ' + semaforo(av(x)) + ' · PIM ' + fM(x.pim)));
+    if (!filas.length) return {html: 'Con el ritmo actual, ninguna de las ' + PLURAL[k] + ' ' + deE(ents) + ' queda con saldo en riesgo ✅. ¿Quieres ver el avance por ' + DIM[k].toLowerCase() + '?', chips: ['Avance por ' + DIM[k].toLowerCase()]};
+    const sub = ents.length ? ' de ' + etiqueta(ents) : '';
+    const nota = (excl && orden ? '<br><small>No incluye "OPP (Otros)", que es una bolsa de recursos.</small>' : '') + (chicos ? '<br><small>' + (chicos === 1 ? 'Se omite 1' : 'Se omiten ' + chicos) + ' con PIM menor a S/ 100 mil.</small>' : '') + (g.length > max ? '<br><small>Se muestran ' + max + ' de ' + g.length + '.</small>' : '');
+    const notaF = nota ? nota + '<br>' : '';
+    const top = g[0] ? g[0].k : '';
+    return {
+      html: (orden === 'riesgo' ? '⚠️ ' : '📊 ') + PLURAL[k][0].toUpperCase() + PLURAL[k].slice(1) + sub + ' ' + titulo + ' al ' + FECHA + ':' + lista(filas) + notaF + '¿Quieres ver el detalle de alguna?',
+      chips: top ? (function(){ const pre = txtEtiq(ents) ? txtEtiq(ents) + ' ' : ''; return [pre + String(top) + (k === 'uo' || k === 'og' ? ' por genérica' : ''), 'Evolución mensual de ' + pre + top]; })() : []
+    };
+  }
+
+  function rMensual(ents, rows, meses){
+    const t = agg(rows);
+    if (meses.length === 1){
+      const m = meses[0];
+      if (m > LAST) return {html: '📅 ' + MESN[m][0].toUpperCase() + MESN[m].slice(1) + ' aún no tiene ejecución. Lo programado en el POI para ese mes es <b>' + fML(t.poi[m]) + '</b> en ' + etiqueta(ents) + '. ¿Quieres ver los meses ya ejecutados?', chips: ['Evolución mensual ' + de(ents)]};
+      return {html: '📅 ' + MESN[m][0].toUpperCase() + MESN[m].slice(1) + (m === LAST ? ' (mes en curso, al ' + FECHA + ')' : '') + ' ' + enE(ents) + ':' + lista([
+        'Devengado del mes: <b>' + fML(t.dvm[m]) + '</b>',
+        'Programado POI: ' + fML(t.poi[m]) + (t.poi[m] ? ' · cumplimiento <b>' + pct(t.dvm[m], t.poi[m]) + '</b>' : ''),
+        'Devengado acumulado a fin de mes: ' + fML(sum(t.dvm.slice(0, m + 1)))
+      ]) + '¿Quieres compararlo con otro mes?', chips: ['Evolución mensual ' + de(ents)]};
+    }
+    const filas = [];
+    for (let m = 0; m <= LAST; m++) filas.push(MES[m] + ': <b>' + fM(t.dvm[m]) + '</b> · POI ' + fM(t.poi[m]) + (t.poi[m] ? ' (' + Math.round(100 * t.dvm[m] / t.poi[m]) + ' %)' : '') + (m === LAST ? ' <small>mes en curso</small>' : ''));
+    const poiRest = sum(t.poi.slice(LAST + 1));
+    return {html: '📅 Devengado mensual vs. POI ' + deE(ents) + ' (al ' + FECHA + '):' + lista(filas) +
+      'Acumulado: <b>' + fML(t.dv) + '</b> (' + pct(t.dv, t.pim) + ' del PIM). Para lo que resta del año, el POI programa ' + fML(poiRest) + '. ¿Quieres ver la proyección de cierre?',
+      chips: ['Proyección de cierre ' + de(ents)]};
+  }
+
+  function rProyeccion(ents, rows){
+    const t = agg(rows); const rit = t.r3 / M3.length;
+    const cierre = t.dv + rit * ML, saldo = Math.max(0, t.pim - t.dv), req = ML > 0 ? saldo / ML : 0, rk = riesgo(t);
+    const meses3 = M3.map(m => MESN[m]).join(', ');
+    return {html: '🔮 Proyección de cierre ' + deE(ents) + ' (estimación simple):' + lista([
+      'Ritmo actual: <b>' + fM(rit) + '/mes</b> (promedio de ' + meses3 + ')',
+      'Cierre a ese ritmo: <b>' + fML(cierre) + '</b> = <b>' + pct(cierre, t.pim) + '</b> del PIM',
+      'Para llegar al 100 %: ' + fM(req) + '/mes' + (rit > 0 ? ' (' + (req / rit).toFixed(1) + ' veces el ritmo actual)' : ''),
+      'Saldo en riesgo: <b>' + fML(rk) + '</b>' + (t.pim ? ' (' + pct(rk, t.pim) + ' del PIM)' : '')
+    ]) + '¿Quieres ver qué unidades concentran el saldo en riesgo?', chips: [ents.some(e => e.k === 'uo') ? txtEtiq(ents) + ': proyectos con mayor saldo en riesgo' : (ents.length ? txtEtiq(ents) + ': ' : '') + 'unidades con mayor saldo en riesgo']};
+  }
+
+  function rCadena(ents, rows){
+    const t = agg(rows);
+    const e1 = Math.max(0, t.pim - t.ce), e2 = Math.max(0, t.ce - t.co), e3 = Math.max(0, t.co - t.dv);
+    const mx = Math.max(e1, e2, e3), cuello = mx === e1 ? 'sin certificar' : mx === e2 ? 'certificado sin comprometer' : 'comprometido sin devengar';
+    return {html: '🔗 Cadena de ejecución ' + deE(ents) + ' al ' + FECHA + ':' + lista([
+      'Certificado: ' + fM(t.ce) + ' (' + pct(t.ce, t.pim) + ' del PIM)',
+      'Comprometido: ' + fM(t.co) + ' (' + pct(t.co, t.pim) + ')',
+      'Devengado: ' + fM(t.dv) + ' (' + pct(t.dv, t.pim) + ')'
+    ]) + 'El mayor saldo está en <b>' + cuello + '</b>: ' + fML(mx) + '. ¿Quieres ver dónde se concentra ese saldo?',
+      chips: [ents.some(e => e.k === 'uo') ? txtEtiq(ents) + ' proyectos con mayor saldo por devengar' : (ents.length ? txtEtiq(ents) + ' ' : '') + 'unidades con mayor saldo por devengar']};
+  }
+
+  function buscarCorte(n){
+    if (!H.length) return null;
+    const parse = e => { const m = e.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
+    const cortes = H.map(h => ({h, f: parse(h.etiqueta)})).filter(c => c.f);
+    const actual = cortes[cortes.length - 1];
+    let objetivo = null;
+    let m = n.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
+    if (m) objetivo = new Date(FY, +m[2] - 1, +m[1]);
+    if (!objetivo){ m = n.match(/\b(\d{1,2}) de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|setiembre|septiembre|octubre|noviembre|diciembre)\b/);
+      if (m) objetivo = new Date(FY, m[2] === 'septiembre' ? 8 : MESN.indexOf(m[2]), +m[1]); }
+    if (!objetivo && /\b(semana pasada|hace una semana|ultima semana)\b/.test(n)) objetivo = new Date(actual.f.getTime() - 7 * 864e5);
+    if (!objetivo && /\b(inicio de mes|comienzo de mes|principio de mes)\b/.test(n)) objetivo = new Date(FY, FMo - 1, 1);
+    let base;
+    if (objetivo){ const prev = cortes.filter(c => c.f <= objetivo && c !== actual); base = prev.length ? prev[prev.length - 1] : cortes[0]; }
+    else base = cortes.length > 1 ? cortes[cortes.length - 2] : null;
+    return base && base !== actual ? {base: base.h, actual: actual.h, exacto: !objetivo || +base.f === +objetivo} : null;
+  }
+  function rComparar(ents, rows, n, k){
+    const c = buscarCorte(n);
+    if (!c) return {html: 'Todavía no hay un corte anterior guardado para comparar 📅. ¿Te muestro las cifras del corte actual?', chips: ['Resumen del pliego']};
+    const hs = new Set(rows.map(r => r.h));
+    const mapa = h => { const o = new Map(); for (const x of h.rows) if (hs.has(x[0])) o.set(x[0], x); return o; };
+    const A = mapa(c.base), B = mapa(c.actual);
+    const tot = M => { let pim = 0, co = 0, dv = 0; for (const x of M.values()){ pim += x[1]; co += x[3]; dv += x[4]; } return {pim, co, dv}; };
+    const a = tot(A), b = tot(B);
+    const fb = c.base.etiqueta.slice(0, 10), fa = c.actual.etiqueta.slice(0, 10);
+    let html = '📈 ' + etiqueta(ents, true) + ': del <b>' + fb + '</b> al <b>' + fa + '</b>' + (c.exacto ? '' : ' <small>(corte más cercano disponible)</small>') + ':' + lista([
+      'Devengado: ' + fM(a.dv) + ' → <b>' + fM(b.dv) + '</b> (<b>' + sgn(b.dv - a.dv) + '</b>)',
+      'Avance: ' + pct(a.dv, a.pim) + ' → <b>' + pct(b.dv, b.pim) + '</b>',
+      'Comprometido: ' + sgn(b.co - a.co) + (Math.abs(b.pim - a.pim) > 1 ? ' · PIM ' + sgn(b.pim - a.pim) : '')
+    ]);
+    if (k){
+      const porK = new Map();
+      for (const r of rows){ const xa = A.get(r.h), xb = B.get(r.h); if (!xb) continue; const key = r[k] || '(sin dato)'; if (!porK.has(key)) porK.set(key, 0); porK.set(key, porK.get(key) + (xb[4] - (xa ? xa[4] : 0))); }
+      const top = [...porK].filter(x => Math.abs(x[1]) >= 1).sort((p, q) => q[1] - p[1]).slice(0, 5);
+      html += top.length ? 'Mayor aumento del devengado por ' + DIM[k].toLowerCase() + ':' + lista(top.map(([kk, v]) => '<b>' + esc(kk) + '</b>: ' + sgn(v))) : 'Ninguna ' + DIM[k].toLowerCase() + ' registró variación en el devengado. ';
+    }
+    return {html: html + '¿Quieres compararlo con otra fecha?', chips: k ? [] : ['¿Qué unidades avanzaron más desde el ' + fb.slice(0, 5) + '?']};
+  }
+
+  function rListado(k){
+    const vals = uniq(k).sort();
+    return {html: 'Estas son las ' + PLURAL[k] + ' de la base (' + vals.length + '):<br>' + vals.map(v => '<b>' + esc(v) + '</b>').join(' · ') + '<br>Escribe cualquiera para ver sus cifras. 💡', chips: []};
+  }
+
+  function rBusqueda(n){
+    const STOP = new Set(['cuanto','cuanta','cuantos','cuales','como','esta','estan','tiene','tienen','sobre','desde','hasta','hola','quiero','saber','avance','ejecucion','gasto','gastos','monto','dinero','presupuesto','devengado','ejecutado','millones','soles','para','entre','donde','cual','dime','muestrame','informacion','datos','total','todos','todas','tablero','favor','gracias','pliego','proyeccion','cierre','riesgo','unidades','unidad','organos','organo','organicas','organica','sectoristas','sectorista','mensual','evolucion','comparar','corte','anterior','resumen','ahora','actual','situacion','estado','mucho','poco','cuantos','gastado','gastaron','gasta','invertido','ejecutaron','ejecutando','podrias','puedes','necesito','consulta']);
+    const pal = n.split(/[^a-z0-9]+/).filter(p => p.length >= 5 && !STOP.has(p)).map(p => p.slice(0, Math.max(5, p.length - 2)));
+    if (!pal.length) return null;
+    const hit = r => pal.some(p => [r.c2, r.ac, r.cl].some(v => norm(v).split(/[^a-z0-9]+/).some(x => x.startsWith(p))));
+    const rows = D.filter(hit);
+    if (!rows.length) return null;
+    const g = agrupar(rows, 'c2').sort((a, b) => b.pim - a.pim);
+    const t = agg(rows);
+    return {html: '🔎 Encontré <b>' + g.length + '</b> concepto(s) relacionados con lo que escribiste (al ' + FECHA + '):' + lista(g.slice(0, 6).map(x => '<b>' + esc(x.k) + '</b>: PIM ' + fM(x.pim) + ' · avance ' + pct(x.dv, x.pim))) +
+      (g.length > 1 ? 'En total: PIM ' + fML(t.pim) + ', devengado ' + fML(t.dv) + ' (' + pct(t.dv, t.pim) + '). ' : '') + '¿Era esto lo que buscabas?', chips: g.slice(0, 2).map(x => 'Evolución mensual de ' + x.k)};
+  }
+
+  const SUGERENCIAS = ['Resumen del pliego', 'Unidades con menor avance', 'Proyección de cierre del pliego', '¿Cómo descargo el PPT?'];
+
+  function responder(texto){
+    const orig = String(texto || '').trim();
+    const n = norm(orig).replace(/[¿?¡!]/g, '');
+    if (!n) return {html: 'Escribe tu pregunta o elige una opción 👇', chips: SUGERENCIAS};
+    if (/^(hola|buen[oa]s( dias| tardes| noches)?|hey|saludos|que tal)\b/.test(n) && n.split(' ').length <= 4)
+      return {html: '¡Hola! 👋 Puedo darte cifras del corte al <b>' + FECHA + '</b> (por unidad, órgano, sectorista, genérica, fuente, proyecto o CUI) y explicarte cómo usar el tablero. ¿Qué necesitas?', chips: SUGERENCIAS};
+    if (/^(gracias|muchas gracias|ok|listo|perfecto|genial|chevere|excelente)\b/.test(n) && n.split(' ').length <= 4)
+      return {html: '¡Con gusto! 😊 ¿Te ayudo con algo más?', chips: SUGERENCIAS};
+    if (/\b(quien eres|que eres|que puedes hacer|que sabes|que haces)\b/.test(n))
+      return {html: 'Soy el asistente del tablero 🤖. Respondo con los mismos datos del tablero (sin inteligencia artificial):' + lista(['Cifras: PIM, devengado, avance y saldo por unidad, órgano, sectorista, genérica, fuente, proyecto o CUI', 'Rankings, evolución mensual, comparación entre cortes y proyección de cierre', 'Cómo usar los filtros, descargas y secciones']) + '¿Por dónde empezamos?', chips: SUGERENCIAS};
+
+    const {ents, sinNombre} = detectar(orig);
+    const meses = mesesDe(n);
+    let k = dimDe(n);
+    const LST = /\b(lista|listado|cuales son|que .*(hay|existen)|muestrame (las|los|todas|todos))\b/.test(n) && !/\b(menor|mayor|atrasad|avance|riesgo|saldo|devengad|pim)\b/.test(n);
+    if (LST){
+      const mp = [['uo', /\bunidades\b/], ['og', /\borganos\b/], ['se', /\bsectoristas\b/], ['ge', /\bgenericas\b/], ['fu', /\bfuentes\b/], ['c2', /\b(proyectos|lineas|conceptos)\b/], ['ac', /\bactividades\b/], ['pj', /\b(cui|inversiones)\b/], ['oe', /\b(oei|objetivos)\b/], ['pr', /\bprogramas\b/]];
+      const hit = mp.find(([, re]) => re.test(n));
+      if (hit) return {html: rListado(hit[0]).html, chips: SUGERENCIAS.slice(0, 3)};
+    }
+    if (sinNombre.length && !ents.length){
+      return {html: 'No encontré <b>' + esc(sinNombre.join(', ')) + '</b> en la base 🤔. Las unidades orgánicas disponibles son:<br>' + [...UO].sort().map(v => '<b>' + esc(v) + '</b>').join(' · ') + '<br>¿Cuál quieres consultar?', chips: SUGERENCIAS.slice(0, 3)};
+    }
+    const quiereUso = /\b(como (descargo|saco|exporto|imprimo|uso|usar|filtro|cargo|comparo|veo|obtengo|genero|se usa|funciona)|donde (esta|encuentro|veo|descargo)|para que sirve|que hace el boton|boton|descargar?|imprimir|ayuda|guia|tutorial)\b/.test(n);
+    const esDefinicion = /\b(que (es|son|significa|significan|quiere decir)|definicion|define)\b/.test(n) && !ents.length;
+    const pideDatos = ents.length || meses.length || k ||
+      /\b(cuanto|cuanta|cuantos|cifra|monto|avance|ejecucion|ejecutado|devengad|pim|saldo|como (va|van|vamos|esta|estan)|resumen|situacion|estado|ranking|menor|mayor|atrasad|rezagad|proyecc|cierre|riesgo|ritmo|corte anterior|desde|ayer|variacion|comprometid|certificad|cuello|mensual|evolucion|lista|listado)\b/.test(n);
+
+    const partes = [];
+    let chips = [];
+    if (quiereUso || (!pideDatos && !esDefinicion)){
+      const g = GUIA.map(x => ({x, s: x.k.test(n) ? 1 : 0})).filter(y => y.s).map(y => y.x);
+      if (g.length){ partes.push('💡 ' + g[0].r); }
+    }
+    if (esDefinicion){
+      const gl = GLOSARIO.filter(x => x.k.test(n));
+      if (gl.length) return {html: gl.slice(0, 2).map(x => x.r).join('<br><br>') + '<br>¿Quieres ver esa cifra para alguna unidad?', chips: SUGERENCIAS.slice(0, 2)};
+      const g = GUIA.find(x => x.k.test(n));
+      if (g) return {html: '💡 ' + g.r + '<br>¿Te ayudo con algo más?', chips: SUGERENCIAS.slice(0, 3)};
+    }
+
+    const soloUsoAtendido = partes.length && quiereUso && !ents.length && !meses.length && !k &&
+      !/\b(cuanto|avance|devengad|desde|ayer|corte anterior|variacion|proyecc|riesgo|saldo|menor|mayor)\b/.test(n);
+    if (!soloUsoAtendido && pideDatos){
+      if (/\b(lista|listado|cuales son|que .* (hay|existen))\b/.test(n) && k && !/\b(menor|mayor|atrasad|avance|riesgo|saldo)\b/.test(n)){
+        const r = rListado(k); return {html: r.html, chips: SUGERENCIAS};
+      }
+      const rows = filtrar(ents);
+      if (!rows.length) return {html: 'No encontré registros que cumplan a la vez: ' + etiqueta(ents, true) + '. 🤔 Prueba con un solo criterio.', chips: SUGERENCIAS};
+      const ordenAsc = /\b(menor|menos|peor|peores|atrasad|rezagad|lent|baja ejecucion|bajo avance|critic)/.test(n);
+      const ordenDesc = /\b(mayor avance|mas avance|mejor|mejores|adelantad|mas avanzad|alto avance)\b/.test(n);
+      const ordenRiesgo = /\briesgo\b/.test(n);
+      const ordenSaldo = /\b(mayor saldo|mas saldo|saldo por devengar|por devengar|sin devengar)\b/.test(n);
+      const comparar = /\b(desde|corte anterior|ayer|variacion|vario|varia|comparad|comparar|avanzo|avanzaron|aumento|crecio|semana pasada|ultimo corte)\b/.test(n);
+      const proy = /\b(proyecc|cierre|cerrar|cerraria|diciembre|fin de ano|ritmo|alcanza|llegar)/.test(n);
+      const cadena = /\b(cuello|cadena|etapa|certificad|sin comprometer|comprometid)/.test(n) && !k;
+      const mensual = meses.length || /\b(mensual|mes a mes|por mes|meses|poi|programad|programacion)\b/.test(n);
+      if ((ordenAsc || ordenDesc || ordenRiesgo || ordenSaldo) && !k && !comparar && !(proy && !ordenRiesgo)) k = ents.some(e => e.k === 'uo') ? 'c2' : 'uo';
+      let r = null;
+      if (!ents.length && !k && !meses.length && !comparar && !proy && !cadena && !ordenRiesgo) r = rBusqueda(n);
+      if (r) {}
+      else if (comparar) r = rComparar(ents, rows, n, k);
+      else if (k && !mensual) r = rRanking(ents, rows, k, ordenRiesgo ? 'riesgo' : ordenSaldo ? 'saldo' : ordenAsc ? 'asc' : ordenDesc ? 'desc' : null);
+      else if (proy && !ordenRiesgo) r = rProyeccion(ents, rows);
+      else if (ordenRiesgo) r = rRanking(ents, rows, k || 'uo', 'riesgo');
+      else if (mensual) r = rMensual(ents, rows, meses.filter(m => m <= 11));
+      else if (cadena) r = rCadena(ents, rows);
+      else if (!ents.length && !/\b(pliego|total|general|resumen|ejecucion|avance|cuanto|situacion|estado|como (va|vamos))\b/.test(n)) r = null;
+      else r = rFicha(ents, rows);
+      if (r){ partes.push(r.html); chips = r.chips; }
+    }
+    if (!partes.length){
+      const b = rBusqueda(n);
+      if (b) return b;
+      const aviso = sinNombre.length ? 'No encontré <b>' + esc(sinNombre.join(', ')) + '</b> en la base. ' : 'No entendí la consulta 🤔. ';
+      return {html: aviso + 'Prueba, por ejemplo, con:' + lista(['"¿Cómo va la SITF?"', '"Unidades con menor avance"', '"Evolución mensual del pliego"', '"Bienes y servicios por unidad"', '"¿Cuánto avanzó desde ayer?"', '"¿Cómo descargo el reporte de sectoristas?"']), chips: SUGERENCIAS};
+    }
+    return {html: partes.join('<br><br>'), chips: chips && chips.length ? chips.slice(0, 3) : SUGERENCIAS.slice(0, 3)};
+  }
+  return {responder, FECHA, SUGERENCIAS};
+}
+
+(function(){
+  function iniciar(T){
+    if (!T || !T.DATA || document.querySelector('.atb-toggle')) return;
+    var A = crearAsistente(T);
+    var btn = document.createElement('button');
+    btn.className = 'atb-toggle'; btn.type = 'button';
+    btn.setAttribute('aria-label', 'Abrir asistente del tablero'); btn.title = 'Asistente del tablero';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    var p = document.createElement('div');
+    p.className = 'atb-panel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Asistente del tablero');
+    p.innerHTML = '<div class="atb-head"><div><b>Asistente del tablero</b><span>Datos al ' + A.FECHA + '</span></div><button class="atb-x" type="button" aria-label="Cerrar">×</button></div>' +
+      '<div class="atb-msgs" aria-live="polite"></div>' +
+      '<form class="atb-form"><input class="atb-in" type="text" placeholder="Escribe tu pregunta…" aria-label="Tu pregunta" autocomplete="off"><button class="atb-send" type="submit">Enviar</button></form>' +
+      '<div class="atb-pie">Respuestas calculadas con los datos del tablero (todo el pliego, sin los filtros aplicados).</div>';
+    document.body.appendChild(btn); document.body.appendChild(p);
+    var msgs = p.querySelector('.atb-msgs'), inp = p.querySelector('.atb-in'), iniciado = false;
+
+    function abajo(){ msgs.scrollTop = msgs.scrollHeight; }
+    function quitarChips(){ msgs.querySelectorAll('.atb-chips').forEach(function(c){ c.remove(); }); }
+    function bot(html, chips){
+      var d = document.createElement('div'); d.className = 'atb-m bot'; d.innerHTML = html; msgs.appendChild(d);
+      if (chips && chips.length){
+        var c = document.createElement('div'); c.className = 'atb-chips';
+        chips.forEach(function(t){ var b = document.createElement('button'); b.type = 'button'; b.className = 'atb-chip'; b.textContent = t; b.onclick = function(){ enviar(t); }; c.appendChild(b); });
+        msgs.appendChild(c);
+      }
+      abajo();
+    }
+    function enviar(texto){
+      texto = String(texto || '').trim(); if (!texto) return;
+      quitarChips();
+      var u = document.createElement('div'); u.className = 'atb-m yo'; u.textContent = texto; msgs.appendChild(u);
+      var e = document.createElement('div'); e.className = 'atb-esc'; e.textContent = 'Escribiendo…'; msgs.appendChild(e); abajo();
+      setTimeout(function(){
+        e.remove();
+        var r;
+        try { r = A.responder(texto); } catch (err) { console.warn(err); r = {html: 'Tuve un problema al calcular esa respuesta 😕. ¿Puedes reformularla?', chips: A.SUGERENCIAS}; }
+        bot(r.html, r.chips);
+      }, 280);
+    }
+    function abrir(){
+      p.classList.add('abierto'); btn.setAttribute('aria-label', 'Cerrar asistente del tablero');
+      if (!iniciado){ iniciado = true; var r = A.responder('hola'); bot(r.html, r.chips); }
+      setTimeout(function(){ inp.focus(); }, 50);
+    }
+    function cerrar(){ p.classList.remove('abierto'); btn.setAttribute('aria-label', 'Abrir asistente del tablero'); btn.focus(); }
+    btn.onclick = function(){ p.classList.contains('abierto') ? cerrar() : abrir(); };
+    p.querySelector('.atb-x').onclick = cerrar;
+    p.addEventListener('keydown', function(ev){ if (ev.key === 'Escape') cerrar(); });
+    p.querySelector('.atb-form').addEventListener('submit', function(ev){ ev.preventDefault(); var t = inp.value; inp.value = ''; enviar(t); });
+  }
+  if (window.__TABLERO__) iniciar(window.__TABLERO__);
+  else window.addEventListener('tablero:listo', function(){ iniciar(window.__TABLERO__); }, {once: true});
+})();
+</script>
+<!-- ===== Fin asistente del tablero ===== -->
 </body>
 </html>

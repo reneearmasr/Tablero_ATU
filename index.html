@@ -1681,9 +1681,10 @@ function renderCCP(){
     const meses = c[7];
     const saldoPendiente = Math.max(0, cert - comp) + Math.max(0, comp - dev);   /* excluye CCP ya ejecutadas al 100% (comprometido y devengado completos) */
     if (meses != null && saldoPendiente > 1){
-      if (meses > 3) avanceL[3].push([id, c[4], saldoPendiente, meses, cert]);
-      if (meses > 6) avanceL[6].push([id, c[4], saldoPendiente, meses, cert]);
-      if (meses > 9) avanceL[9].push([id, c[4], saldoPendiente, meses, cert]);
+      /* tramos exclusivos, sin cruzarse: (3-6], (6-9], (9-12] */
+      if (meses > 3 && meses <= 6) avanceL[3].push([id, c[4], saldoPendiente, meses, cert]);
+      else if (meses > 6 && meses <= 9) avanceL[6].push([id, c[4], saldoPendiente, meses, cert]);
+      else if (meses > 9 && meses <= 12) avanceL[9].push([id, c[4], saldoPendiente, meses, cert]);
     }
   });
   sinCompromiso.sort((a,b) => b[1]-a[1]); sinDevengar.sort((a,b) => b[1]-a[1]);
@@ -1703,7 +1704,7 @@ function renderCCP(){
     const resto = lst.length > 5 ? '<div style="font-size:11.5px;color:'+C.muted+';margin-top:2px">+ '+(lst.length-5)+' más, abre el asistente del tablero y escribe «'+verLabel+'» para verlas.</div>' : '';
     return filaHead + top + resto;
   };
-  const dlBtn = umbral => '<button type="button" onclick="descargarCCPAvanceCSV('+umbral+')" title="Descargar en Excel las CCP sin avance hace más de '+umbral+' meses" style="display:flex;align-items:center;gap:5px;margin-top:8px;border:1px solid '+C.navy2+';border-radius:6px;background:#fff;color:'+C.navy2+';font-size:11.5px;font-weight:600;line-height:1;padding:6px 9px;cursor:pointer">⬇ Descargar Excel</button>';
+  const dlBtn = umbral => '<button type="button" onclick="descargarCCPAvanceCSV('+umbral+')" title="Descargar en Excel las CCP sin avance entre '+umbral+' y '+(umbral+3)+' meses" style="display:flex;align-items:center;gap:5px;margin-top:8px;border:1px solid '+C.navy2+';border-radius:6px;background:#fff;color:'+C.navy2+';font-size:11.5px;font-weight:600;line-height:1;padding:6px 9px;cursor:pointer">⬇ Descargar Excel</button>';
   const tile = (label, val, sub, color, umbral) => '<div class="card" style="padding:12px 14px;border-left:4px solid '+(color||C.slate)+';display:flex;flex-direction:column"><div style="font-size:10.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">'+label+'</div><div style="font-size:24px;font-weight:700;margin-top:4px">'+val+'</div><div style="font-size:11px;color:'+C.muted+';margin-top:2px">'+sub+'</div>'+(umbral!=null?dlBtn(umbral):'')+'</div>';
 
   /* plazos MEF relevantes para CCP: cierre de modificaciones del mes del corte+1, y cierre de ejercicio */
@@ -1724,9 +1725,9 @@ function renderCCP(){
     '<div style="display:grid;grid-template-columns:repeat(5, minmax(0,1fr));gap:10px;margin-bottom:12px">' +
       tile('Sin comprometer', sinCompromiso.length, 'CCP certificados, S/ 0 comprometido', C.amber) +
       tile('Sin devengar', sinDevengar.length, 'compromisos, S/ 0 devengado', C.rose) +
-      tile('Sin avance &gt;3 meses', tieneAvance ? avanceL[3].length : '—', tieneAvance ? 'con saldo pendiente, sin movimiento hace &gt;3 meses' : 'pendiente de datos PCA', C.slate, tieneAvance ? 3 : null) +
-      tile('Sin avance &gt;6 meses', tieneAvance ? avanceL[6].length : '—', tieneAvance ? 'con saldo pendiente, sin movimiento hace &gt;6 meses' : 'pendiente de datos PCA', C.slate, tieneAvance ? 6 : null) +
-      tile('Sin avance &gt;9 meses', tieneAvance ? avanceL[9].length : '—', tieneAvance ? 'con saldo pendiente, sin movimiento hace &gt;9 meses' : 'pendiente de datos PCA', C.slate, tieneAvance ? 9 : null) +
+      tile('Sin avance 3-6 meses', tieneAvance ? avanceL[3].length : '—', tieneAvance ? 'con saldo pendiente, entre 3 y 6 meses sin movimiento' : 'pendiente de datos PCA', C.slate, tieneAvance ? 3 : null) +
+      tile('Sin avance 6-9 meses', tieneAvance ? avanceL[6].length : '—', tieneAvance ? 'con saldo pendiente, entre 6 y 9 meses sin movimiento' : 'pendiente de datos PCA', C.slate, tieneAvance ? 6 : null) +
+      tile('Sin avance 9-12 meses', tieneAvance ? avanceL[9].length : '—', tieneAvance ? 'con saldo pendiente, entre 9 y 12 meses sin movimiento' : 'pendiente de datos PCA', C.slate, tieneAvance ? 9 : null) +
     '</div>' +
     '<div style="display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:12px;margin-bottom:12px">' +
       '<div class="card" style="border-left:4px solid '+C.amber+';padding:14px 16px;gap:8px">' +
@@ -1765,7 +1766,7 @@ window.descargarCCPAvanceCSV = function(umbral){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'CCP_sin_avance_mas_de_' + umbral + '_meses_' + (window.__TABLERO__ ? window.__TABLERO__.FECHA_CORTE : '') + '.csv';
+  a.download = 'CCP_sin_avance_' + umbral + '_a_' + (umbral + 3) + '_meses_' + (window.__TABLERO__ ? window.__TABLERO__.FECHA_CORTE : '') + '.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };

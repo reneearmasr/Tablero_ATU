@@ -1672,26 +1672,32 @@ function renderCCP(){
   const sec = document.getElementById('ccpSecTitulo'), panel = document.getElementById('ccpPanel');
   if (!CERTIF || !CERTIF.ccp){ sec.style.display = 'none'; panel.style.display = 'none'; return; }
   const entries = Object.entries(CERTIF.ccp).filter(([,c]) => !c[5]);   /* excluye CCP en moneda distinta a soles */
-  let totCert = 0, totComp = 0, totDev = 0;
   const sinCompromiso = [], sinDevengar = [];
+  let avance3 = 0, avance6 = 0, avance9 = 0;
   entries.forEach(([id, c]) => {
     const [cert, comp, dev] = c;
-    totCert += cert; totComp += comp; totDev += dev;
     if (comp === 0 && cert > 0) sinCompromiso.push([id, cert, c[4]]);
     else if (dev === 0 && comp > 0) sinDevengar.push([id, comp, c[4]]);
+    const meses = c[7];
+    if (meses != null){
+      if (meses > 9) avance9++;
+      if (meses > 6) avance6++;
+      if (meses > 3) avance3++;
+    }
   });
   sinCompromiso.sort((a,b) => b[1]-a[1]); sinDevengar.sort((a,b) => b[1]-a[1]);
   const sumSinCompromiso = sinCompromiso.reduce((a,x) => a+x[1], 0);
   const sumSinDevengar = sinDevengar.reduce((a,x) => a+x[1], 0);
-  const porComprometer = Math.max(0, totCert - totComp);
+  const tieneAvance = entries.some(([,c]) => c[7] != null);
 
   const fila = (id, monto, glosa) => '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:6px 8px;background:'+C.grid+';border-radius:6px"><span style="color:'+C.muted+'">CCP '+esc(id)+' · '+esc((glosa||'').slice(0,60))+((glosa||'').length>60?'…':'')+'</span><span style="font-weight:600;white-space:nowrap">'+fmtM(monto)+'</span></div>';
   const listaOClick = (lst, verLabel) => {
     if (!lst.length) return '<div style="font-size:12px;color:'+C.muted+'">Ninguna.</div>';
-    const top = lst.slice(0,3).map(x => fila(x[0], x[1], x[2])).join('');
-    const resto = lst.length > 3 ? '<div style="font-size:11.5px;color:'+C.muted+';margin-top:2px">+ '+(lst.length-3)+' más, abre el asistente del tablero y escribe «'+verLabel+'» para verlas.</div>' : '';
+    const top = lst.slice(0,5).map(x => fila(x[0], x[1], x[2])).join('');
+    const resto = lst.length > 5 ? '<div style="font-size:11.5px;color:'+C.muted+';margin-top:2px">+ '+(lst.length-5)+' más, abre el asistente del tablero y escribe «'+verLabel+'» para verlas.</div>' : '';
     return top + resto;
   };
+  const tile = (label, val, sub, color) => '<div class="card" style="padding:12px 14px;border-left:4px solid '+(color||C.slate)+'"><div style="font-size:10.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">'+label+'</div><div style="font-size:24px;font-weight:700;margin-top:4px">'+val+'</div><div style="font-size:11px;color:'+C.muted+';margin-top:2px">'+sub+'</div></div>';
 
   /* plazos MEF relevantes para CCP: cierre de modificaciones del mes del corte+1, y cierre de ejercicio */
   const diasModif = [10,10,10,8,10,10,10,10,9,10,10,8];   /* día límite de aprobación de modificaciones por mes (mes 1..12), ver Cuadro de Plazos AF 2026 */
@@ -1708,11 +1714,12 @@ function renderCCP(){
   sec.style.display = ''; panel.style.display = '';
   document.getElementById('ccpSub').textContent = 'Análisis y alertas sobre certificaciones, al ' + fmtFecha(FECHA_CORTE) + (CERTIF.corte ? ' · reporte de certificaciones al ' + CERTIF.corte : '');
   panel.innerHTML =
-    '<div style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:12px;margin-bottom:12px">' +
-      '<div class="card" style="padding:14px 16px"><div style="font-size:11.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">Certificado</div><div style="font-size:21px;font-weight:700;margin-top:4px">'+fmtM(totCert)+'</div><div style="font-size:11.5px;color:'+C.muted+';margin-top:2px">'+entries.length+' CCP</div></div>' +
-      '<div class="card" style="padding:14px 16px"><div style="font-size:11.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">Comprometido</div><div style="font-size:21px;font-weight:700;margin-top:4px">'+fmtM(totComp)+'</div><div style="font-size:11.5px;color:'+C.teal+';margin-top:2px;font-weight:600">'+pct(totCert?totComp/totCert:0)+' del certificado</div></div>' +
-      '<div class="card" style="padding:14px 16px"><div style="font-size:11.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">Devengado</div><div style="font-size:21px;font-weight:700;margin-top:4px">'+fmtM(totDev)+'</div><div style="font-size:11.5px;color:'+C.blue+';margin-top:2px;font-weight:600">'+pct(totComp?totDev/totComp:0)+' del comprometido</div></div>' +
-      '<div class="card" style="padding:14px 16px"><div style="font-size:11.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">Certificado por comprometer</div><div style="font-size:21px;font-weight:700;margin-top:4px;color:'+C.amber+'">'+fmtM(porComprometer)+'</div><div style="font-size:11.5px;color:'+C.muted+';margin-top:2px">saldo sin comprometer</div></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(5, minmax(0,1fr));gap:10px;margin-bottom:12px">' +
+      tile('Sin comprometer', sinCompromiso.length, 'CCP certificados, S/ 0 comprometido', C.amber) +
+      tile('Sin devengar', sinDevengar.length, 'compromisos, S/ 0 devengado', C.rose) +
+      tile('Sin avance &gt;3 meses', tieneAvance ? avance3 : '—', tieneAvance ? 'CCP sin movimiento hace más de 3 meses' : 'pendiente de datos PCA', C.slate) +
+      tile('Sin avance &gt;6 meses', tieneAvance ? avance6 : '—', tieneAvance ? 'CCP sin movimiento hace más de 6 meses' : 'pendiente de datos PCA', C.slate) +
+      tile('Sin avance &gt;9 meses', tieneAvance ? avance9 : '—', tieneAvance ? 'CCP sin movimiento hace más de 9 meses' : 'pendiente de datos PCA', C.slate) +
     '</div>' +
     '<div style="display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:12px;margin-bottom:12px">' +
       '<div class="card" style="border-left:4px solid '+C.amber+';padding:14px 16px;gap:8px">' +
@@ -1734,7 +1741,7 @@ function renderCCP(){
       '</div>' +
       '<div style="font-size:11px;color:'+C.slate+';margin-top:10px">Plazos generales del MEF, no específicos a cada CCP. Detalle completo disponible en el asistente del tablero ("plazos por vencer").</div>' +
     '</div>' +
-    '<div style="font-size:11.5px;color:'+C.slate+';margin-top:10px">"Sin compromiso" y "sin devengar" se calculan sobre el total acumulado por CCP (no por línea del reporte de certificaciones). Se excluyen CCP en moneda distinta a soles.</div>';
+    '<div style="font-size:11.5px;color:'+C.slate+';margin-top:10px">"Sin comprometer" y "sin devengar" se calculan sobre el total acumulado por CCP (reporte de Certificaciones/Compromiso). "Sin avance" se calcula a partir del reporte PCA de movimientos (fecha del último movimiento de cada CCP frente al corte). Se excluyen CCP en moneda distinta a soles.</div>';
 }
 
 /* ===== Actualización general ===== */
@@ -3175,18 +3182,20 @@ function crearAsistente(T, OPT){
   function rCCP(num){
     const c = CCP.ccp[num];
     if (!c) return {html: 'No encontré la <b>CCP N° ' + esc(num) + '</b> en el reporte de certificaciones (corte ' + esc(CCP.corte) + ') 🤔. Verifica el número o busca por palabras de la glosa, por ejemplo <i>"CCP locadores DFS"</i>.', chips: ['CCP con mayor saldo por comprometer']};
-    const [ce, co, dv, gi, glosa, mon, comps] = c;
+    const [ce, co, dv, gi, glosa, mon, comps, meses] = c;
     const m = mon ? mon + ' ' : 'S/ ';
     const fmt = v => mon ? fS(v, mon) : fM(v);
     const avc = ce ? dv / ce : 0;
     const top = comps.slice().sort((a, b) => b[1] - a[1]).slice(0, 5);
     const lc = top.map(x => fila('Compromiso ' + x[0] + ' · ' + x[4] + ' exp.', fmt(x[1]), x[1] ? x[2] / x[1] : 0, 'v', 'devengado ' + fmt(x[2]) + (x[5] ? ' · ' + esc(corta(x[5], 90)) : ''))).join('');
+    const avanceTxt = meses != null ? (meses === 0 ? 'Tiene movimientos (PCA) este mes.' : 'Sin movimientos (PCA) desde hace <b>' + meses + ' mes' + (meses === 1 ? '' : 'es') + '</b>.') : '';
     return {html: titulo('🧾', 'CCP N° ' + esc(num) + ' <span>reporte SIAF al ' + esc(CCP.corte) + '</span>') +
       '<p class="atb-glosa">' + esc(glosa) + '</p>' +
       '<div class="atb-kpis">' + kpi('Certificado', fmt(ce)) + kpi('Comprometido', fmt(co)) + kpi('Devengado', fmt(dv), 'k-' + tono(avc)) + '</div>' + barra(avc, tono(avc)) +
       '<div class="atb-dl"><span>Saldo por comprometer</span><b>' + fS(ce - co, m.trim()) + '</b><span>Saldo por devengar</span><b>' + fS(ce - dv, m.trim()) + '</b><span>Girado</span><b>' + fS(gi, m.trim()) + '</b><span>Compromisos</span><b>' + comps.length + '</b></div>' +
+      (avanceTxt ? '<p>' + avanceTxt + '</p>' : '') +
       (comps.length ? '<p>' + (comps.length > 5 ? 'Los 5 compromisos de mayor monto:' : 'Compromisos:') + '</p><div class="atb-rows">' + lc + '</div>' : '<p>Esta CCP aún <b>no tiene compromisos</b> registrados.</p>') +
-      pie('¿Quieres consultar otra CCP?'), chips: ['CCP con mayor saldo por comprometer']};
+      pie('¿Quieres consultar otra CCP?'), chips: ['CCP con mayor saldo por comprometer', 'CCP sin avance']};
   }
   function rCCPBuscar(n){
     const STOPC = new Set(['ccp','ccps','certificado','certificados','certificacion','certificaciones','credito','presupuestario','presupuestaria','de','del','la','las','el','los','para','por','con','sobre','que','cual','cuales','hay','tiene','buscar','busca','dame','muestrame','numero','nro','informacion','datos','en','y','a','al','un','una']);
@@ -3201,7 +3210,17 @@ function crearAsistente(T, OPT){
         '<div class="atb-rows">' + L.slice(0, 6).map(([k, c]) => fila('CCP ' + k, fM(c[0] - c[1]), (c[0] - c[1]) / Math.max(1, L[0][1][0] - L[0][1][1]), 'n', esc(corta(c[4], 80)))).join('') + '</div>' +
         nota(L.length + ' CCP tienen saldo por comprometer, en total ' + fML(tot) + '.') + pie('¿Quieres ver el detalle de alguna?'), chips: L.slice(0, 3).map(x => 'CCP ' + x[0])};
     }
-    if (!pal.length) return {html: '🧾 Puedo buscar una certificación por su número (ej. <i>"CCP 100"</i>) o por palabras de la glosa (ej. <i>"CCP locadores DFS"</i>). ¿Cuál necesitas?', chips: ['CCP con mayor saldo por comprometer']};
+    const sinAvance = /\bsin avance\b|\bsin movimiento\b|\bsin movimientos\b|\bmeses sin\b/.test(n);
+    if (sinAvance){
+      for (const [k, c] of Object.entries(CCP.ccp)) if (!c[5] && c[7] != null) L.push([k, c]);
+      if (!L.length) return {html: 'El reporte PCA de movimientos no está disponible todavía para calcular esto 😕.', chips: ['CCP con mayor saldo por comprometer']};
+      L.sort((a, b) => b[1][7] - a[1][7]);
+      return {html: titulo('🧾', 'CCP con más meses sin avance <span>reporte PCA al ' + esc(CCP.corte) + '</span>') +
+        '<div class="atb-rows">' + L.slice(0, 6).map(([k, c]) => fila('CCP ' + k, c[7] + ' mes' + (c[7] === 1 ? '' : 'es'), Math.min(1, c[7] / 9), c[7] > 6 ? 'r' : c[7] > 3 ? 'a' : 'v', esc(corta(c[4], 80)))).join('') + '</div>' +
+        nota('>3 meses: ' + L.filter(x => x[1][7] > 3).length + ' · >6 meses: ' + L.filter(x => x[1][7] > 6).length + ' · >9 meses: ' + L.filter(x => x[1][7] > 9).length + '.') +
+        pie('¿Quieres ver el detalle de alguna?'), chips: L.slice(0, 3).map(x => 'CCP ' + x[0])};
+    }
+    if (!pal.length) return {html: '🧾 Puedo buscar una certificación por su número (ej. <i>"CCP 100"</i>) o por palabras de la glosa (ej. <i>"CCP locadores DFS"</i>), o por "CCP sin avance". ¿Cuál necesitas?', chips: ['CCP con mayor saldo por comprometer', 'CCP sin avance']};
     for (const [k, c] of Object.entries(CCP.ccp)){
       const txt = norm(c[4] + ' ' + c[6].map(x => x[5]).join(' '));
       if (pal.every(p => txt.includes(p))) L.push([k, c]);

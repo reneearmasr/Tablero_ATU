@@ -1681,9 +1681,9 @@ function renderCCP(){
     const meses = c[7];
     const saldoPendiente = Math.max(0, cert - comp) + Math.max(0, comp - dev);   /* excluye CCP ya ejecutadas al 100% (comprometido y devengado completos) */
     if (meses != null && saldoPendiente > 1){
-      if (meses > 3) avanceL[3].push([id, c[4], saldoPendiente, meses]);
-      if (meses > 6) avanceL[6].push([id, c[4], saldoPendiente, meses]);
-      if (meses > 9) avanceL[9].push([id, c[4], saldoPendiente, meses]);
+      if (meses > 3) avanceL[3].push([id, c[4], saldoPendiente, meses, cert]);
+      if (meses > 6) avanceL[6].push([id, c[4], saldoPendiente, meses, cert]);
+      if (meses > 9) avanceL[9].push([id, c[4], saldoPendiente, meses, cert]);
     }
   });
   sinCompromiso.sort((a,b) => b[1]-a[1]); sinDevengar.sort((a,b) => b[1]-a[1]);
@@ -1758,8 +1758,8 @@ window.descargarCCPAvanceCSV = function(umbral){
   const lst = (window.__CCP_AVANCE__ || {})[umbral] || [];
   if (!lst.length) return;
   const escCsv = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
-  const filas = [['CCP', 'Glosa', 'Saldo pendiente (S/)', 'Meses sin avance']]
-    .concat(lst.map(x => [x[0], x[1] || '', (Math.round(x[2] * 100) / 100).toFixed(2), x[3]]));
+  const filas = [['CCP', 'Glosa', 'Monto certificado (S/)', 'Antigüedad (meses)']]
+    .concat(lst.map(x => [x[0], x[1] || '', (Math.round(x[4] * 100) / 100).toFixed(2), x[3]]));
   const csv = filas.map(r => r.map(escCsv).join(';')).join('\r\n');
   const blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);

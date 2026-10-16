@@ -393,6 +393,11 @@ td.name{white-space:normal;min-width:140px;max-width:260px;line-height:1.3}
   </div>
   <div class="tbl-wrap"><table id="tbl"></table></div>
 
+  <div class="sec" id="ccpSecTitulo" style="display:none">
+    <div><h2>Certificaciones de Crédito Presupuestario (CCP)</h2><p id="ccpSub"></p></div>
+  </div>
+  <div id="ccpPanel" style="display:none"></div>
+
   <p class="foot">Montos en soles. El avance anual es devengado sobre PIM; las columnas mensuales de la tabla de detalle corresponden al mes del corte (ver la nota bajo "Detalle"). Las etapas de los cuellos de botella se calculan con los montos SIAF (PIM, certificado, comprometido y devengado por registro), por lo que pueden diferir de la columna "Certificado por Comprometer" de la base. La proyección es una estimación simple y no reemplaza la programación oficial. Se excluyeron de este análisis las columnas de programación "ajustado" (CL a DH, alternadas) y la fila de totales de la hoja; los totales del tablero coinciden con ella. Los umbrales de color (70 % y 50 %) pueden cambiarse en las constantes UMBRAL_ALTO y UMBRAL_MEDIO del código.</p>
 
   <div style="margin-top:18px;padding-top:14px;border-top:1px solid #E4EAF1;text-align:center">
@@ -1662,6 +1667,76 @@ function snapshotActual(){
   return {fecha:FECHA_CORTE, etiqueta:fmtFecha(FECHA_CORTE)+' '+HORA_CORTE, rows:[...m.entries()].map(([h,a]) => [h].concat(a.map(v => Math.round(v*100)/100)))};
 }
 
+/* ===== Panel CCP (certificaciones de crédito presupuestario) ===== */
+function renderCCP(){
+  const sec = document.getElementById('ccpSecTitulo'), panel = document.getElementById('ccpPanel');
+  if (!CERTIF || !CERTIF.ccp){ sec.style.display = 'none'; panel.style.display = 'none'; return; }
+  const entries = Object.entries(CERTIF.ccp).filter(([,c]) => !c[5]);   /* excluye CCP en moneda distinta a soles */
+  let totCert = 0, totComp = 0, totDev = 0;
+  const sinCompromiso = [], sinDevengar = [];
+  entries.forEach(([id, c]) => {
+    const [cert, comp, dev] = c;
+    totCert += cert; totComp += comp; totDev += dev;
+    if (comp === 0 && cert > 0) sinCompromiso.push([id, cert, c[4]]);
+    else if (dev === 0 && comp > 0) sinDevengar.push([id, comp, c[4]]);
+  });
+  sinCompromiso.sort((a,b) => b[1]-a[1]); sinDevengar.sort((a,b) => b[1]-a[1]);
+  const sumSinCompromiso = sinCompromiso.reduce((a,x) => a+x[1], 0);
+  const sumSinDevengar = sinDevengar.reduce((a,x) => a+x[1], 0);
+  const porComprometer = Math.max(0, totCert - totComp);
+
+  const fila = (id, monto, glosa) => '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:6px 8px;background:'+C.grid+';border-radius:6px"><span style="color:'+C.muted+'">CCP '+esc(id)+' · '+esc((glosa||'').slice(0,60))+((glosa||'').length>60?'…':'')+'</span><span style="font-weight:600;white-space:nowrap">'+fmtM(monto)+'</span></div>';
+  const listaOClick = (lst, verLabel) => {
+    if (!lst.length) return '<div style="font-size:12px;color:'+C.muted+'">Ninguna.</div>';
+    const top = lst.slice(0,3).map(x => fila(x[0], x[1], x[2])).join('');
+    const resto = lst.length > 3 ? '<div style="font-size:11.5px;color:'+C.muted+';margin-top:2px">+ '+(lst.length-3)+' más, abre el asistente del tablero y escribe «'+verLabel+'» para verlas.</div>' : '';
+    return top + resto;
+  };
+
+  /* plazos MEF relevantes para CCP: cierre de modificaciones del mes del corte+1, y cierre de ejercicio */
+  const diasModif = [10,10,10,8,10,10,10,10,9,10,10,8];   /* día límite de aprobación de modificaciones por mes (mes 1..12), ver Cuadro de Plazos AF 2026 */
+  const hoy = new Date(FY, LAST, FD);
+  const mesCorte = LAST;   /* 0 = enero */
+  let fModif = new Date(FY, mesCorte+1, diasModif[mesCorte] ?? 10);
+  if (fModif < hoy) fModif = new Date(FY, mesCorte+2, diasModif[(mesCorte+1)%12] ?? 10);
+  const fCierre = new Date(FY, 11, 31);
+  const diasEntre = (a,b) => Math.round((b-a)/864e5);
+  const dModif = diasEntre(hoy, fModif), dCierre = diasEntre(hoy, fCierre);
+  const fTxt = d => String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+  const chip = (d, txt) => '<div style="display:flex;align-items:center;gap:10px;font-size:12.5px"><div style="background:'+(d<=7?C.rose:d<=20?C.amber:C.slate)+';color:#fff;border-radius:6px;padding:3px 9px;font-weight:700;font-size:11.5px;white-space:nowrap">'+(d<0?'venció':d+' días')+'</div><span>'+txt+'</span></div>';
+
+  sec.style.display = ''; panel.style.display = '';
+  document.getElementById('ccpSub').textContent = 'Análisis y alertas sobre certificaciones, al ' + fmtFecha(FECHA_CORTE) + (CERTIF.corte ? ' · reporte de certificaciones al ' + CERTIF.corte : '');
+  panel.innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:12px;margin-bottom:12px">' +
+      '<div class="card" style="padding:14px 16px"><div style="font-size:11.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">Certificado</div><div style="font-size:21px;font-weight:700;margin-top:4px">'+fmtM(totCert)+'</div><div style="font-size:11.5px;color:'+C.muted+';margin-top:2px">'+entries.length+' CCP</div></div>' +
+      '<div class="card" style="padding:14px 16px"><div style="font-size:11.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">Comprometido</div><div style="font-size:21px;font-weight:700;margin-top:4px">'+fmtM(totComp)+'</div><div style="font-size:11.5px;color:'+C.teal+';margin-top:2px;font-weight:600">'+pct(totCert?totComp/totCert:0)+' del certificado</div></div>' +
+      '<div class="card" style="padding:14px 16px"><div style="font-size:11.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">Devengado</div><div style="font-size:21px;font-weight:700;margin-top:4px">'+fmtM(totDev)+'</div><div style="font-size:11.5px;color:'+C.blue+';margin-top:2px;font-weight:600">'+pct(totComp?totDev/totComp:0)+' del comprometido</div></div>' +
+      '<div class="card" style="padding:14px 16px"><div style="font-size:11.5px;color:'+C.muted+';text-transform:uppercase;letter-spacing:.03em">Certificado por comprometer</div><div style="font-size:21px;font-weight:700;margin-top:4px;color:'+C.amber+'">'+fmtM(porComprometer)+'</div><div style="font-size:11.5px;color:'+C.muted+';margin-top:2px">saldo sin comprometer</div></div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:12px;margin-bottom:12px">' +
+      '<div class="card" style="border-left:4px solid '+C.amber+';padding:14px 16px;gap:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:'+C.amber+';flex:none"></div><div style="font-weight:700;font-size:13.5px">'+sinCompromiso.length+' CCP certificados sin ningún compromiso</div></div>' +
+        '<div style="font-size:12.5px;color:'+C.muted+'">'+fmtM(sumSinCompromiso)+' en riesgo de perder vigencia si no se comprometen antes del cierre del ejercicio.</div>' +
+        '<div style="display:flex;flex-direction:column;gap:5px;margin-top:4px">'+listaOClick(sinCompromiso, 'CCP sin compromiso')+'</div>' +
+      '</div>' +
+      '<div class="card" style="border-left:4px solid '+C.rose+';padding:14px 16px;gap:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:'+C.rose+';flex:none"></div><div style="font-weight:700;font-size:13.5px">'+sinDevengar.length+' compromisos sin ningún devengado</div></div>' +
+        '<div style="font-size:12.5px;color:'+C.muted+'">'+fmtM(sumSinDevengar)+' comprometidos que aún no registran gasto devengado.</div>' +
+        '<div style="display:flex;flex-direction:column;gap:5px;margin-top:4px">'+listaOClick(sinDevengar, 'CCP sin devengar')+'</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card" style="padding:14px 16px">' +
+      '<div style="font-weight:700;font-size:13.5px;margin-bottom:10px;color:'+C.navy2+'">Próximos plazos — Cuadro de Plazos AF 2026 (MEF)</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+        chip(dModif, 'Aprobación de modificaciones presupuestarias en el Nivel Funcional Programático — hasta el '+fTxt(fModif)) +
+        chip(dCierre, 'Cierre del ejercicio presupuestal — devengar compromisos pendientes antes del '+fTxt(fCierre)) +
+      '</div>' +
+      '<div style="font-size:11px;color:'+C.slate+';margin-top:10px">Plazos generales del MEF, no específicos a cada CCP. Detalle completo disponible en el asistente del tablero ("plazos por vencer").</div>' +
+    '</div>' +
+    '<div style="font-size:11.5px;color:'+C.slate+';margin-top:10px">"Sin compromiso" y "sin devengar" se calculan sobre el total acumulado por CCP (no por línea del reporte de certificaciones). Se excluyen CCP en moneda distinta a soles.</div>';
+}
+
 /* ===== Actualización general ===== */
 function update(skipKey){
   const rows = filterRows();
@@ -2507,6 +2582,7 @@ buildFilters();
 initCharts();
 fillBaseSel();
 update();
+renderCCP();
 })();
 </script>
 <!-- ===== Asistente del tablero (local, sin IA ni servicios externos) ===== -->

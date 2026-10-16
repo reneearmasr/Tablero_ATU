@@ -1608,6 +1608,31 @@ function alertasSectorista(rs, us, ts, nombre, rowsAll){
   }
   return A.map((a,i) => ({...a, i})).sort((a,b) => b.n - a.n || a.i - b.i).slice(0, nombre === 'Alejandro Reyes' ? 12 : 7);
 }
+/* Alertas de certificaciones (CCP) a cargo de un sectorista — cruce por secFunc (índice 9 del array de cada CCP) */
+function alertasCCPSectorista(nombre){
+  if (!CERTIF || !CERTIF.ccp) return null;
+  const entries = Object.entries(CERTIF.ccp).filter(([,c]) => !c[5] && c[9] === nombre);
+  let sinComprometer = 0, sumSinComprometer = 0, sinDevengar = 0, sumSinDevengar = 0;
+  const avanceL = {3:0, 6:0, 9:0};
+  entries.forEach(([,c]) => {
+    const [cert, comp, dev] = c;
+    if (comp === 0 && cert > 0){ sinComprometer++; sumSinComprometer += cert; }
+    else if (dev === 0 && comp > 0){ sinDevengar++; sumSinDevengar += comp; }
+    const meses = c[7];
+    const saldoPendiente = Math.max(0, cert - comp) + Math.max(0, comp - dev);
+    if (meses != null && saldoPendiente > 1){
+      if (meses > 3 && meses <= 6) avanceL[3]++;
+      else if (meses > 6 && meses <= 9) avanceL[6]++;
+      else if (meses > 9 && meses <= 12) avanceL[9]++;
+    }
+  });
+  const A = [];
+  if (sinComprometer) A.push({n:3, ti:'Sin comprometer', tx: sinComprometer+' CCP certificados sin ningún compromiso, '+fmtM(sumSinComprometer)+' en riesgo de perder vigencia si no se comprometen antes del cierre del ejercicio.'});
+  if (sinDevengar) A.push({n:2, ti:'Sin devengar', tx: sinDevengar+' compromisos sin ningún devengado, '+fmtM(sumSinDevengar)+' comprometidos que aún no registran gasto devengado.'});
+  const avTot = avanceL[3] + avanceL[6] + avanceL[9];
+  if (avTot) A.push({n: avanceL[9] || avanceL[6] ? 3 : 2, ti:'Sin avance', tx: avTot+' CCP con saldo pendiente y sin movimiento en el PCA: '+avanceL[3]+' entre 3 y 6 meses, '+avanceL[6]+' entre 6 y 9, '+avanceL[9]+' entre 9 y 12.'});
+  return {total: entries.length, A};
+}
 function buildSectoristas(rows, t){
   const hoy = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'});
   const fecha = 'Datos al '+fmtFecha(FECHA_CORTE)+', '+HORA_CORTE+'<br>Emitido el '+hoy;
@@ -1656,6 +1681,12 @@ function buildSectoristas(rows, t){
     const col = {3:'#D9534F', 2:'#F2A93B', 1:'#12A08A'}, al = alertasSectorista(rs, us, ts, nombre, rows);
     h += '<h2>Principales alertas de sus unidades orgánicas</h2><div class="rs-al">' + (al.length ? al.map(a => '<i style="background:'+col[a.n]+'"></i><b class="t">'+a.ti+'</b><span>'+a.tx+'</span>').join('') : '<span></span><span></span><span>Sin alertas para sus unidades con esta combinación de filtros.</span>') + '</div>'+
       '<p class="rs-foot"><span style="color:#D9534F">●</span> crítica · <span style="color:#F2A93B">●</span> atención · <span style="color:#12A08A">●</span> informativa. El punto de cada unidad resume su estado: rojo si el avance acumulado es menor a '+Math.round(UMBRAL_MEDIO*100)+' % o no tiene devengado; ámbar si es menor a '+Math.round(UMBRAL_ALTO*100)+' % o el avance mensual es menor a '+Math.round(UMBRAL_MEDIO*100)+' %; gris si no se incluye en el análisis de alertas. Saldo en riesgo: parte del PIM que no se devengaría a diciembre al ritmo de los últimos 3 meses cerrados (estimación simple).</p>';
+    /* alertas de certificaciones (CCP) de sus unidades */
+    const ccpA = alertasCCPSectorista(nombre);
+    if (ccpA){
+      h += '<h2>Certificaciones (CCP) de sus unidades orgánicas</h2><div class="rs-al">' + (ccpA.A.length ? ccpA.A.map(a => '<i style="background:'+col[a.n]+'"></i><b class="t">'+a.ti+'</b><span>'+a.tx+'</span>').join('') : '<span></span><span></span><span>Sin alertas de certificaciones para sus unidades, de '+ccpA.total+' CCP a su cargo.</span>') + '</div>'+
+        '<p class="rs-foot">Certificaciones (CCP) asignadas según la unidad orgánica del movimiento más reciente de cada una, al '+fmtFecha(FECHA_CORTE)+(CERTIF.corte ? ' · reporte de certificaciones al '+CERTIF.corte : '')+'.</p>';
+    }
     return '<div class="rs-page">'+h+pie(idx+1, N)+'</div>';
   });
   return '<div class="rs">'+pages.join('')+'</div>';

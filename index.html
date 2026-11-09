@@ -411,11 +411,12 @@ td.name{white-space:normal;min-width:140px;max-width:260px;line-height:1.3}
 
 <script>
 (async function(){
-let DATA, HISTORIAL, FECHA_CORTE, HORA_CORTE, CERTIF;
+let DATA, HISTORIAL, FECHA_CORTE, HORA_CORTE, CERTIF, F12B_AUTO;
 try {
   const resp = await fetch('datos.json', {cache: 'no-store'});
   const j = await resp.json();
   DATA = j.data; HISTORIAL = j.historial; FECHA_CORTE = j.fecha_corte; HORA_CORTE = j.hora_corte; CERTIF = j.certificados || null;
+  F12B_AUTO = j.f12b || null;   /* 12-B consultado a diario en el SSI del MEF al generar datos.json */
 } catch (e) {
   document.body.innerHTML = '<div style="padding:60px 24px;font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;color:#16324F">' +
     '<h2>No se pudieron cargar los datos</h2>' +
@@ -1208,6 +1209,8 @@ const F12B_EMBED = {"meta":{"tipo":"pdf","archivo":"Formatos_12-b_de_Inversiones
 const F12_KEY = 'atu_f12b_v1';
 let f12b = Object.assign({}, F12B_EMBED.filas || {}), f12meta = F12B_EMBED.meta || null;
 try { const s = JSON.parse(localStorage.getItem(F12_KEY) || 'null'); if (s && s.filas){ Object.assign(f12b, s.filas); f12meta = s.meta || f12meta; } } catch (e) {}
+/* el 12-B automático (SSI del MEF, diario) es el más reciente: prevalece sobre el incrustado y el cargado a mano */
+if (F12B_AUTO && F12B_AUTO.filas && Object.keys(F12B_AUTO.filas).length){ Object.assign(f12b, F12B_AUTO.filas); f12meta = F12B_AUTO.meta || f12meta; }
 const nrm = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 function parseFecha(v){
   if (v instanceof Date && !isNaN(v)) return v;

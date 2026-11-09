@@ -2022,6 +2022,8 @@ async function buildDeckPPT(PptxGenJS, D){
   const sg = v => (v >= 0 ? "+" : "\u2212");
   const statusColor = (av, hi, lo) => { hi = hi === undefined ? 0.70 : hi; lo = lo === undefined ? 0.50 : lo; return av >= hi ? GREEN : av >= lo ? AMBER : RED; };
   const fechaTxt = (() => { const [y,m,dd] = D.fecha.split("-"); return dd + " de " + MESN[+m - 1].toLowerCase() + " de " + y; })();
+  /* mes del corte (los campos *_set de D.total y por_generica son de este mes) */
+  const MES_C = MESN[LAST], mes_c = MES_C.toLowerCase(), RANGO_C = MES_C.slice(0,3).toLowerCase() + "–dic";
 
   const pres = new PptxGenJS();
   pres.layout = "LAYOUT_WIDE";
@@ -2080,7 +2082,7 @@ async function buildDeckPPT(PptxGenJS, D){
       ["03","Ejecuci\u00f3n por gen\u00e9rica y concepto","D\u00f3nde est\u00e1 el saldo y c\u00f3mo avanza cada gen\u00e9rica",5],
       ["04","Seguimiento al estado de locadores","Brecha de PEA y costo mensual por unidad org\u00e1nica",6],
       ["05","Ejecuci\u00f3n por tipo de obligaci\u00f3n contractual","Gesti\u00f3n ATU vs. obligaci\u00f3n contractual",7],
-      ["06","Proyecci\u00f3n al cierre del a\u00f1o","Programaci\u00f3n setiembre\u2013diciembre y saldo pendiente",8],
+      ["06","Proyecci\u00f3n al cierre del a\u00f1o","Programaci\u00f3n "+mes_c+"\u2013diciembre y saldo pendiente",8],
       ["07","Estado de las inversiones","Avance financiero de los proyectos activos",9],
       ["08","Programaci\u00f3n de inversiones por trimestre","Programado (POI) vs. ejecutado",10],
     ];
@@ -2141,6 +2143,7 @@ async function buildDeckPPT(PptxGenJS, D){
       {name:"PIM", labels:D.infografia_generica.map(g=>GE_LBL[g.ge]||g.ge), values:D.infografia_generica.map(g=>g.pim)},
     ], {
       x:xB, y:y0+0.32, w:wB, h:chA-0.32,
+      layout:{x:0.3796, y:0.0095, w:0.2585, h:0.6644},   /* tamaño de la dona ajustado por el usuario */
       chartColors:D.infografia_generica.map(g=>GE_COL2[g.ge]||NAVY),
       holeSize:55, showLegend:true, legendPos:"b", legendFontFace:FONT, legendFontSize:7.6, legendColor:INK,
       showValue:false, showPercent:true, dataLabelFontFace:FONT, dataLabelFontSize:8, dataLabelColor:WHITE,
@@ -2193,7 +2196,7 @@ async function buildDeckPPT(PptxGenJS, D){
     const kpis0 = [
       ["PIM","S/ "+nfM(D.total.pim)+" M",""],
       ["Devengado","S/ "+nfM(D.total.dv)+" M", pct(av,1)+" del PIM"],
-      ["Avance mensual", pct(avM,1), "Setiembre"],
+      ["Avance mensual", pct(avM,1), MES_C],
       ["Saldo por devengar","S/ "+nfM(D.total.pim-D.total.dv)+" M", pct(1-av,1)+" del PIM"],
       ["Cuello principal","S/ "+nfM(D.cuellos.comp_sin_devengar)+" M","comprometido sin devengar"],
     ];
@@ -2221,7 +2224,7 @@ async function buildDeckPPT(PptxGenJS, D){
         [riesgoSev, "Saldo en riesgo", ": S/ "+nfM(A.en_riesgo)+" M ("+pct(div(A.en_riesgo,A.pim),1)+" del PIM) no se devengar\u00eda al ritmo de los \u00faltimos 3 meses."],
         [AMBER, "Cuello de botella", ": "+cuelloLbl[0]+" concentra S/ "+nfM(cuelloLbl[1])+" M ("+pct(cuT>0?cuelloLbl[1]/cuT:0,0)+" del saldo)."],
         [A.sin_devengar_top?RED:GREEN, "Sin devengado", A.sin_devengar_top ? ": S/ "+nfM(A.sin_devengar_top.pim)+" M en \""+A.sin_devengar_top.k+"\" a\u00fan en 0 % (alcanza a "+A.sin_devengar_top.n+" "+(tipo==="Actividades"?"gen\u00e9ricas":"proyectos")+")." : ": no hay partidas relevantes en 0 %."],
-        [avMSev, "Avance de setiembre", ": "+(A.avM==null?"sin programaci\u00f3n":pct(A.avM,1))+" de lo programado, frente a "+pct(avM,1)+" del pliego."],
+        [avMSev, "Avance de "+mes_c, ": "+(A.avM==null?"sin programaci\u00f3n":pct(A.avM,1))+" de lo programado, frente a "+pct(avM,1)+" del pliego."],
         [GREEN, A.mejor.k, " lidera el avance: "+pct(A.mejor.av,1)+" de S/ "+nfM(A.mejor.pim)+" M."],
       ];
       items.forEach((it,i) => {
@@ -2271,7 +2274,7 @@ async function buildDeckPPT(PptxGenJS, D){
     });
     const x3 = 0.45+cw2+0.2, cw3 = 12.44-cw2-0.2-0.45;
     card(s, x3, y2, cw3, ch2);
-    const pw2 = pill(s, x3+0.18, y2+0.16, "Setiembre", {color:BLUE});
+    const pw2 = pill(s, x3+0.18, y2+0.16, MES_C, {color:BLUE});
     const brecha = D.total.po_set-D.total.dv_set;
     s.addText("Programado vs. devengado por gen\u00e9rica \u00b7 brecha S/ "+nfM(brecha)+" M", {x:x3+0.18+pw2+0.18, y:y2+0.2, w:cw3-0.36-pw2, h:0.22, fontFace:FONT, fontSize:9.3, color:MUTED, valign:"middle", isTextBox:true, margin:0});
     const geSet = [...D.por_generica].reverse();
@@ -2289,13 +2292,15 @@ async function buildDeckPPT(PptxGenJS, D){
     const y4 = y2+ch2+0.18, ch4 = 1.15, cw4 = (12.44-0.9)/3-0.02;
     const top5 = D.top_saldo.slice(0,5), sum5 = top5.reduce((a,r)=>a+r.saldo,0);
     const otrosG = D.por_generica.find(g=>g.ge==="Otros gastos");
+    const nom5 = top5.map(r => r.c2.replace(/^Inversiones - /, ""));
+    const brechaGe = [...D.por_generica].map(g => ({ge:GE_LBL[g.ge]||g.ge, b:g.po_set-g.dv_set})).sort((a,b) => b.b - a.b).filter(g => g.b > 0).slice(0,2).map(g => g.ge);
     const insights = [
       ["Cinco conceptos, "+pct(div(sum5, D.total.pim-D.total.dv),0)+" del saldo", BLUE,
-        [{t:"S/ "+nfM(sum5)+" M", b:true}, {t:" de los S/ "+nfM(D.total.pim-D.total.dv)+" M por devengar se concentran en subsidios y en las concesiones PKT, CPAO y RPMO.", b:false}]],
+        [{t:"S/ "+nfM(sum5)+" M", b:true}, {t:" de los S/ "+nfM(D.total.pim-D.total.dv)+" M por devengar se concentran en "+nom5.slice(0,-1).join(", ")+" y "+nom5[nom5.length-1]+".", b:false}]],
       ["\"Otros gastos\" explica la menor avance", RED,
         [{t:"Otros gastos", b:true}, {t:" avanza solo "+pct(otrosG.av,1)+" (S/ "+nfM(otrosG.pim-otrosG.dv)+" M por devengar), la gen\u00e9rica con menor ejecuci\u00f3n del pliego.", b:false}]],
       ["Programaci\u00f3n por ajustar", AMBER,
-        [{t:pct(div(D.total.dv_set, D.total.po_set),0), b:true}, {t:" de avance mensual institucional: la brecha de setiembre se concentra en Activos no financieros y Otros gastos.", b:false}]],
+        [{t:pct(div(D.total.dv_set, D.total.po_set),0), b:true}, {t:" de avance mensual institucional"+(brechaGe.length ? ": la brecha de "+mes_c+" se concentra en "+brechaGe.join(" y ")+"." : "."), b:false}]],
     ];
     insights.forEach((it,i) => {
       const x = 0.45+i*(cw4+0.02);
@@ -2383,8 +2388,8 @@ async function buildDeckPPT(PptxGenJS, D){
     const kpis = [
       ["PIM total","S/ "+nfM(D.total.pim)+" M","Certificado "+pct(D.total.ce/D.total.pim,1)+" \u00b7 Compromiso "+pct(D.total.co/D.total.pim,1)],
       ["Devengado acumulado", pct(av,1), "S/ "+nfM(D.total.dv)+" M devengados"],
-      ["Avance setiembre", pct(avM,1), "S/ "+nfM(D.total.dv_set)+" M de S/ "+nfM(D.total.po_set)+" M programados"],
-      ["Saldo por devengar","S/ "+nfM(D.total.pim-D.total.dv)+" M", pct(1-av,1)+" del PIM a ejecutar oct\u2013dic"],
+      ["Avance "+mes_c, pct(avM,1), "S/ "+nfM(D.total.dv_set)+" M de S/ "+nfM(D.total.po_set)+" M programados"],
+      ["Saldo por devengar","S/ "+nfM(D.total.pim-D.total.dv)+" M", pct(1-av,1)+" del PIM a ejecutar "+RANGO_C],
       ["Certificado sin comprometer","S/ "+nfM(D.cuellos.cert_sin_comprometer)+" M", pct(div(D.cuellos.cert_sin_comprometer, D.total.pim-D.total.dv),0)+" del saldo por devengar"],
     ];
     kpis.forEach((k,i) => {
@@ -2438,9 +2443,10 @@ async function buildDeckPPT(PptxGenJS, D){
     const gOC = tiMap2["Obligaci\u00f3n Contractual"];
     const insights5 = [
       ["Obligaciones contractuales en ruta", GREEN,
-        [{t:pct(div(gOC.dv,gOC.pim),1)+" devengado", b:true}, {t:" y "+pct(div(gOC.ce,gOC.pim),1)+" del PIM ya comprometido. El saldo de S/ "+nfM(gOC.pim-gOC.dv)+" M se ejecuta seg\u00fan cronograma contractual.", b:false}]],
-      ["Subsidios concentran el rezago", RED,
-        [{t:D.punto_atencion.c2+": ", b:true}, {t:"S/ "+nfM(D.punto_atencion.pim)+" M sin ejecutar.", b:false}]],
+        [{t:pct(div(gOC.dv,gOC.pim),1)+" devengado", b:true}, {t:" y "+pct(div(gOC.co,gOC.pim),1)+" del PIM ya comprometido. El saldo de S/ "+nfM(gOC.pim-gOC.dv)+" M se ejecuta seg\u00fan cronograma contractual.", b:false}]],
+      ["Mayor saldo por devengar", RED,
+        [{t:D.top_saldo[0].c2.replace(/^Inversiones - /, "")+": ", b:true}, {t:"S/ "+nfM(D.top_saldo[0].saldo)+" M por devengar ("+pct(div(D.top_saldo[0].dv, D.top_saldo[0].pim),1)+" de avance)."
+          + (D.punto_atencion.dv <= 0 && D.punto_atencion.c2 !== D.top_saldo[0].c2 ? " Sin ejecución aún: "+D.punto_atencion.c2+" (S/ "+nfM(D.punto_atencion.pim)+" M)." : ""), b:false}]],
       ["Partidas por acelerar", AMBER,
         [{t:rank[rank.length-1].ge, b:true}, {t:": "+pct(rank[rank.length-1].av,1)+" de avance, la gen\u00e9rica m\u00e1s rezagada del pliego.", b:false}]],
     ];
@@ -2460,13 +2466,13 @@ async function buildDeckPPT(PptxGenJS, D){
     header(s, "UP | Proyecci\u00f3n al cierre del a\u00f1o");
     subtitle(s, ["Seguimiento al "+fechaTxt, "Total Pliego ATU", "Cifras en S/ millones"]);
     const av = D.total.dv/D.total.pim, avM = D.total.dv_set/D.total.po_set;
-    const progSD = D.total.po_set+D.total.po_oct+D.total.po_nov+D.total.po_dic;
+    const progSD = D.total.po_set + [D.total.po_oct, D.total.po_nov, D.total.po_dic].filter((v,i) => 9+i > LAST).reduce((a,v) => a+v, 0);
     const y0 = 1.35, ch1 = 1.05, kw = (12.44-0.8)/5-0.02, x0 = 0.45;
     const kpis = [
       ["PIM total","S/ "+nfM(D.total.pim)+" M","Devengado S/ "+nfM(D.total.dv)+" M \u00b7 "+pct(av,1)],
-      ["Saldo por devengar","S/ "+nfM(D.total.pim-D.total.dv)+" M", pct(1-av,1)+" del PIM a ejecutar oct\u2013dic"],
-      ["Programado set\u2013dic","S/ "+nfM(progSD)+" M","seg\u00fan el POI vigente"],
-      ["Avance mensual", pct(avM,1), "S/ "+nfM(D.total.dv_set)+" M de S/ "+nfM(D.total.po_set)+" M en setiembre"],
+      ["Saldo por devengar","S/ "+nfM(D.total.pim-D.total.dv)+" M", pct(1-av,1)+" del PIM a ejecutar "+RANGO_C],
+      ["Programado "+RANGO_C,"S/ "+nfM(progSD)+" M","seg\u00fan el POI vigente"],
+      ["Avance mensual", pct(avM,1), "S/ "+nfM(D.total.dv_set)+" M de S/ "+nfM(D.total.po_set)+" M en "+mes_c],
       ["Meses restantes", Math.max(0, 11-LAST).toString(), "hasta diciembre"],
     ];
     kpis.forEach((k,i) => {
@@ -2480,7 +2486,7 @@ async function buildDeckPPT(PptxGenJS, D){
     card(s, x0, y2, cw2, ch2);
     const pwP = pill(s, x0+0.18, y2+0.14, "Devengado acumulado proyectado", {color:BLUE});
     s.addText("Mismo c\u00e1lculo que el tablero interactivo \u00b7 S/ millones", {x:x0+0.18+pwP+0.15, y:y2+0.14, w:cw2-0.35-pwP, h:0.3, fontFace:FONT, fontSize:9, color:MUTED, valign:"middle", isTextBox:true, margin:0});
-    const MESES12 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Set*","Oct","Nov","Dic"];
+    const MESES12 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Set","Oct","Nov","Dic"].map((m,i) => i===LAST ? m+"*" : m);
     const PZ = D.proyeccion, toM = arr => arr.map(v => v==null?null:v/1e6);
     s.addChart(pres.ChartType.line, [
       {name:"Devengado real", labels:MESES12, values:toM(PZ.real)},
@@ -2496,7 +2502,7 @@ async function buildDeckPPT(PptxGenJS, D){
       showLegend:true, legendPos:"b", legendFontFace:FONT, legendFontSize:8.6,
       showTitle:false, catGridLine:{style:"none"}, valGridLine:{color:LINE, style:"solid", size:0.5},
     });
-    s.addText("Fuente: SIAF-MPP, base al "+fechaTxt+". * Setiembre a la fecha del corte. Ritmo actual = promedio de los \u00faltimos 3 meses cerrados; ritmo requerido = saldo por devengar entre los meses que restan del a\u00f1o.",
+    s.addText("Fuente: SIAF-MPP, base al "+fechaTxt+". * "+MES_C+" a la fecha del corte. Ritmo actual = promedio de los \u00faltimos 3 meses cerrados; ritmo requerido = saldo por devengar entre los meses que restan del a\u00f1o.",
       {x:x0, y:y2+ch2+0.06, w:cw2, h:0.24, fontFace:FONT, fontSize:8.3, italic:true, color:MUTED, isTextBox:true, margin:0});
     const yC = y2+ch2+0.34, chC = 0.55;
     card(s, x0, yC, cw2, chC);

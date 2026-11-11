@@ -396,6 +396,7 @@ td.name{white-space:normal;min-width:140px;max-width:260px;line-height:1.3}
 
   <div class="sec" id="ccpSecTitulo" style="display:none">
     <div><h2>Certificaciones de Crédito Presupuestario (CCP)</h2><p id="ccpSub"></p></div>
+    <button class="btn primary" type="button" onclick="descargarCCPTodasCSV()" title="Descargar en Excel todas las CCP acumuladas con sus alertas, órgano, unidad orgánica y saldo por devengar">⬇ Descargar todas las CCP (Excel)</button>
   </div>
   <div id="ccpPanel" style="display:none"></div>
 
@@ -1735,6 +1736,11 @@ function renderCCP(){
   sinCompromiso.sort(porAntiguedad); sinDevengar.sort(porAntiguedad);
   [3,6,9].forEach(u => avanceL[u].sort((a,b) => b[3]-a[3] || b[2]-a[2]));
   window.__CCP_AVANCE__ = avanceL;
+  /* para la descarga de todas las CCP: mismas CCP del panel (respeta filtros de unidad orgánica y sectorista) + órgano de cada unidad */
+  const ogDe = new Map();
+  { const cnt = new Map(); DATA.forEach(r => { if (!r.uo || !r.og) return; let m = cnt.get(r.uo); if (!m){ m = new Map(); cnt.set(r.uo, m); } m.set(r.og, (m.get(r.og)||0) + 1); });
+    cnt.forEach((m, uo) => ogDe.set(uo, [...m.entries()].sort((a,b) => b[1]-a[1])[0][0])); }
+  window.__CCP_TODAS__ = {entries, ogDe};
   const sumSinCompromiso = sinCompromiso.reduce((a,x) => a+x[1], 0);
   const sumSinDevengar = sinDevengar.reduce((a,x) => a+x[1], 0);
   const tieneAvance = entries.some(([,c]) => c[7] != null);
@@ -1825,6 +1831,44 @@ window.descargarCCPAvanceCSV = function(umbral){
   const a = document.createElement('a');
   a.href = url;
   a.download = 'CCP_sin_avance_' + umbral + '_a_' + (umbral + 3) + '_meses_' + (window.__TABLERO__ ? window.__TABLERO__.FECHA_CORTE : '') + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+/* Descarga en CSV (abre en Excel) de TODAS las CCP acumuladas del panel con sus alertas,
+   órgano, unidad orgánica y "Por devengar" = Certificado - Devengado. */
+window.descargarCCPTodasCSV = function(){
+  const T = window.__CCP_TODAS__;
+  if (!T || !T.entries.length){ alert('No hay certificaciones para descargar con estos filtros.'); return; }
+  const n2 = v => (Math.round((v || 0) * 100) / 100).toFixed(2);
+  const escCsv = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+  const alertas = c => {
+    const [cert, comp, dev] = c, m = c[7], L = [];
+    if (comp === 0 && cert > 0) L.push('Sin comprometer');
+    else if (dev === 0 && comp > 0) L.push('Sin devengar');
+    const pend = Math.max(0, cert - comp) + Math.max(0, comp - dev);
+    if (m != null && pend > 1){
+      if (m > 3 && m <= 6) L.push('Sin avance 3-6 meses');
+      else if (m > 6 && m <= 9) L.push('Sin avance 6-9 meses');
+      else if (m > 9 && m <= 12) L.push('Sin avance 9-12 meses');
+    }
+    if (L.length) return L.join(' + ');
+    if (cert <= 0 && comp <= 0 && dev <= 0) return 'Certificado en cero (anulada o rebajada)';
+    return pend <= 1 ? 'Ejecutada al 100%' : 'Sin alerta';
+  };
+  const filas = T.entries.map(([id, c]) => {
+    const uo = c[8] || '', og = uo ? (T.ogDe.get(uo) || '') : '';
+    return {id, og, uo, c};
+  }).sort((a,b) => (a.og || '~').localeCompare(b.og || '~', 'es') || (a.uo || '~').localeCompare(b.uo || '~', 'es') || (Number(a.id) - Number(b.id)));
+  const out = [['CCP', 'Órgano', 'Unidad orgánica', 'Sectorista', 'Glosa', 'Certificado (S/)', 'Comprometido (S/)', 'Devengado (S/)', 'Girado (S/)', 'Por comprometer (S/)', 'Por devengar (S/)', 'Meses sin avance (PCA)', 'Alerta']]
+    .concat(filas.map(({id, og, uo, c}) => [id, og || 'Sin dato', uo || 'Sin dato', c[9] || 'Sin dato', c[4] || '',
+      n2(c[0]), n2(c[1]), n2(c[2]), n2(c[3]), n2(Math.max(0, c[0] - c[1])), n2(c[0] - c[2]), c[7] == null ? '' : c[7], alertas(c)]));
+  const csv = out.map(r => r.map(escCsv).join(';')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'CCP_acumuladas_con_alertas_' + (window.__TABLERO__ ? window.__TABLERO__.FECHA_CORTE : '') + '.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };

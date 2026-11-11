@@ -1835,13 +1835,24 @@ window.descargarCCPAvanceCSV = function(umbral){
   URL.revokeObjectURL(url);
 };
 
-/* Descarga en CSV (abre en Excel) de TODAS las CCP acumuladas del panel con sus alertas,
-   órgano, unidad orgánica y "Por devengar" = Certificado - Devengado. */
-window.descargarCCPTodasCSV = function(){
+/* Descarga en Excel (.xlsx, con ExcelJS) de TODAS las CCP acumuladas del panel con sus alertas,
+   órgano, unidad orgánica y "Por devengar" = Certificado - Devengado.
+   Orden: Por devengar de mayor a menor; títulos azul marino con letra blanca, filtro y subtotal al final
+   (SUBTOTAL 9: suma solo las filas visibles cuando se filtra). Si la librería no carga, baja CSV. */
+function loadExcelJS(){
+  return new Promise((resolve, reject) => {
+    if (window.ExcelJS) return resolve(window.ExcelJS);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = () => resolve(window.ExcelJS);
+    s.onerror = () => reject(new Error('cdn'));
+    document.head.appendChild(s);
+  });
+}
+window.descargarCCPTodasCSV = async function(){
   const T = window.__CCP_TODAS__;
   if (!T || !T.entries.length){ alert('No hay certificaciones para descargar con estos filtros.'); return; }
-  const n2 = v => (Math.round((v || 0) * 100) / 100).toFixed(2);
-  const escCsv = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+  const r2 = v => Math.round((v || 0) * 100) / 100;
   const alertas = c => {
     const [cert, comp, dev] = c, m = c[7], L = [];
     if (comp === 0 && cert > 0) L.push('Sin comprometer');
@@ -1856,21 +1867,60 @@ window.descargarCCPTodasCSV = function(){
     if (cert <= 0 && comp <= 0 && dev <= 0) return 'Certificado en cero (anulada o rebajada)';
     return pend <= 1 ? 'Ejecutada al 100%' : 'Sin alerta';
   };
+  const HEAD = ['CCP', 'Órgano', 'Unidad orgánica', 'Sectorista', 'Glosa', 'Certificado (S/)', 'Comprometido (S/)', 'Devengado (S/)', 'Girado (S/)', 'Por comprometer (S/)', 'Por devengar (S/)', 'Meses sin avance (PCA)', 'Alerta'];
   const filas = T.entries.map(([id, c]) => {
     const uo = c[8] || '', og = uo ? (T.ogDe.get(uo) || '') : '';
-    return {id, og, uo, c};
-  }).sort((a,b) => (a.og || '~').localeCompare(b.og || '~', 'es') || (a.uo || '~').localeCompare(b.uo || '~', 'es') || (Number(a.id) - Number(b.id)));
-  const out = [['CCP', 'Órgano', 'Unidad orgánica', 'Sectorista', 'Glosa', 'Certificado (S/)', 'Comprometido (S/)', 'Devengado (S/)', 'Girado (S/)', 'Por comprometer (S/)', 'Por devengar (S/)', 'Meses sin avance (PCA)', 'Alerta']]
-    .concat(filas.map(({id, og, uo, c}) => [id, og || 'Sin dato', uo || 'Sin dato', c[9] || 'Sin dato', c[4] || '',
-      n2(c[0]), n2(c[1]), n2(c[2]), n2(c[3]), n2(Math.max(0, c[0] - c[1])), n2(c[0] - c[2]), c[7] == null ? '' : c[7], alertas(c)]));
-  const csv = out.map(r => r.map(escCsv).join(';')).join('\r\n');
-  const blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'CCP_acumuladas_con_alertas_' + (window.__TABLERO__ ? window.__TABLERO__.FECHA_CORTE : '') + '.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+    return [isNaN(Number(id)) ? id : Number(id), og || 'Sin dato', uo || 'Sin dato', c[9] || 'Sin dato', c[4] || '',
+      r2(c[0]), r2(c[1]), r2(c[2]), r2(c[3]), r2(Math.max(0, c[0] - c[1])), r2(c[0] - c[2]), c[7] == null ? null : c[7], alertas(c)];
+  }).sort((a,b) => b[10] - a[10] || (Number(a[0]) - Number(b[0])));   /* Por devengar de mayor a menor */
+  const nombre = 'CCP_acumuladas_con_alertas_' + (window.__TABLERO__ ? window.__TABLERO__.FECHA_CORTE : '');
+  const bajar = (blob, ext) => {
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = nombre + ext;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  let ExcelJS;
+  try { ExcelJS = await loadExcelJS(); } catch(e) { ExcelJS = null; }
+  if (!ExcelJS){
+    /* respaldo: CSV sin formato */
+    const escCsv = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+    const n = filas.length, sum = j => filas.reduce((s,f) => s + f[j], 0);
+    const tot = ['SUBTOTAL', '', '', '', n + ' CCP'].concat([5,6,7,8,9,10].map(j => r2(sum(j)).toFixed(2))).concat(['', '']);
+    const csv = [HEAD].concat(filas.map(f => f.map((v,j) => j >= 5 && j <= 10 ? v.toFixed(2) : v)), [tot]).map(r => r.map(escCsv).join(';')).join('\r\n');
+    bajar(new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8;'}), '.csv');
+    return;
+  }
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('CCP', {views: [{state: 'frozen', ySplit: 1}]});
+  const ANCHO = [10, 12, 19, 20, 60, 18, 18, 18, 17, 18, 18, 16, 36];
+  ws.columns = HEAD.map((h, i) => ({width: ANCHO[i]}));
+  const hr = ws.addRow(HEAD);
+  hr.height = 36;
+  hr.eachCell(c => {
+    c.fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: 'FF16324F'}};
+    c.font = {bold: true, color: {argb: 'FFFFFFFF'}};
+    c.alignment = {vertical: 'middle', horizontal: 'center', wrapText: true};
+  });
+  filas.forEach(f => ws.addRow(f));
+  const n = filas.length, ult = n + 1;
+  for (let j = 6; j <= 11; j++) ws.getColumn(j).numFmt = '#,##0.00';
+  ws.autoFilter = {from: {row: 1, column: 1}, to: {row: ult, column: HEAD.length}};
+  /* subtotal al final, fuera del rango del filtro */
+  const st = ws.addRow(['SUBTOTAL']);
+  const L = j => String.fromCharCode(64 + j);
+  st.getCell(5).value = {formula: 'SUBTOTAL(3,A2:A' + ult + ')&" CCP"', result: n + ' CCP'};
+  for (let j = 6; j <= 11; j++){
+    st.getCell(j).value = {formula: 'SUBTOTAL(9,' + L(j) + '2:' + L(j) + ult + ')', result: r2(filas.reduce((s,f) => s + f[j-1], 0))};
+  }
+  st.eachCell({includeEmpty: true}, (c, j) => {
+    if (j > HEAD.length) return;
+    c.font = {bold: true};
+    c.fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: 'FFE2E8F0'}};
+    c.border = {top: {style: 'thin', color: {argb: 'FF16324F'}}};
+  });
+  const buf = await wb.xlsx.writeBuffer();
+  bajar(new Blob([buf], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), '.xlsx');
 };
 
 /* ===== Actualización general ===== */

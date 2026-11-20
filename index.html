@@ -1727,9 +1727,9 @@ function renderCCP(){
     const saldoPendiente = Math.max(0, cert - comp) + Math.max(0, comp - dev);   /* excluye CCP ya ejecutadas al 100% (comprometido y devengado completos) */
     if (meses != null && saldoPendiente > 1){
       /* tramos exclusivos, sin cruzarse: (3-6], (6-9], (9-12] */
-      if (meses > 3 && meses <= 6) avanceL[3].push([id, c[4], saldoPendiente, meses, cert, comp, dev]);
-      else if (meses > 6 && meses <= 9) avanceL[6].push([id, c[4], saldoPendiente, meses, cert, comp, dev]);
-      else if (meses > 9 && meses <= 12) avanceL[9].push([id, c[4], saldoPendiente, meses, cert, comp, dev]);
+      if (meses > 3 && meses <= 6) avanceL[3].push([id, c[4], saldoPendiente, meses, cert, comp, dev, c[10]]);
+      else if (meses > 6 && meses <= 9) avanceL[6].push([id, c[4], saldoPendiente, meses, cert, comp, dev, c[10]]);
+      else if (meses > 9 && meses <= 12) avanceL[9].push([id, c[4], saldoPendiente, meses, cert, comp, dev, c[10]]);
     }
   });
   const porAntiguedad = (a,b) => (b[3]==null?-1:b[3]) - (a[3]==null?-1:a[3]) || b[1]-a[1];   /* más meses sin avance primero; sin dato PCA al final; empate por monto */
@@ -1747,7 +1747,7 @@ function renderCCP(){
 
   const mesesTxt = m => m == null ? '—' : (m + ' m.');
   const mesesColor = m => m == null ? C.slate : m > 6 ? C.rose : m > 3 ? C.amber : C.slate;
-  const fila = (id, monto, glosa, meses) => '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;padding:6px 8px;background:'+C.grid+';border-radius:6px"><span style="color:'+C.muted+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0">CCP '+esc(id)+' · '+esc((glosa||'').slice(0,60))+((glosa||'').length>60?'…':'')+'</span><span style="font-weight:600;white-space:nowrap;flex:none">'+fmtM(monto)+'</span><span title="antigüedad de la previsión (meses sin avance, según PCA)" style="font-weight:600;white-space:nowrap;flex:none;min-width:44px;text-align:right;color:'+mesesColor(meses)+'">'+mesesTxt(meses)+'</span></div>';
+  const fila = (id, monto, glosa, meses) => '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;padding:6px 8px;background:'+C.grid+';border-radius:6px"><span style="color:'+C.muted+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0">CCP '+esc(id)+' · '+esc((glosa||'').slice(0,60))+((glosa||'').length>60?'…':'')+'</span><span style="font-weight:600;white-space:nowrap;flex:none">'+fmtM(monto)+'</span><span title="antigüedad de la previsión (meses sin avance, según PCA y Formato H)" style="font-weight:600;white-space:nowrap;flex:none;min-width:44px;text-align:right;color:'+mesesColor(meses)+'">'+mesesTxt(meses)+'</span></div>';
   const filaHead = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:10px;color:'+C.slate+';text-transform:uppercase;letter-spacing:.03em;padding:0 8px"><span style="flex:1 1 auto"></span><span style="flex:none;white-space:nowrap">Monto</span><span style="flex:none;white-space:nowrap;min-width:44px;text-align:right">Antigüedad</span></div>';
   const listaOClick = (lst, verLabel) => {
     if (!lst.length) return '<div style="font-size:12px;color:'+C.muted+'">Ninguna.</div>';
@@ -1819,12 +1819,15 @@ function renderCCP(){
 /* Descarga en CSV (abre directo en Excel) la lista de CCP sin avance hace más de <umbral> meses.
    Se asigna explícitamente a window porque el onclick del botón (atributo HTML) se ejecuta en el
    scope global, y esta función vive dentro del IIFE del script principal. */
+/* columnas del Formato H (HOGI) por CCP: c[10] = [fecha, tipo, documento de compromiso, expediente, RUC] */
+const FH_HEAD = ['Último movimiento (fecha)', 'Último movimiento (tipo)', 'Documento de compromiso', 'Expediente SIAF (último mov.)', 'Proveedor (RUC)'];
 window.descargarCCPAvanceCSV = function(umbral){
   const lst = (window.__CCP_AVANCE__ || {})[umbral] || [];
   if (!lst.length) return;
   const escCsv = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
-  const filas = [['CCP', 'Glosa', 'Monto certificado (S/)', 'Compromiso (S/)', 'Devengado (S/)', 'Antigüedad (meses)']]
-    .concat(lst.map(x => [x[0], x[1] || '', (Math.round(x[4] * 100) / 100).toFixed(2), (Math.round(x[5] * 100) / 100).toFixed(2), (Math.round(x[6] * 100) / 100).toFixed(2), x[3]]));
+  const fhv = x => { const h = x[7] || []; return [h[0] || '', h[1] || '', h[2] || '', h[3] || '', h[4] || '']; };
+  const filas = [['CCP', 'Glosa', 'Monto certificado (S/)', 'Compromiso (S/)', 'Devengado (S/)', 'Antigüedad (meses)'].concat(FH_HEAD)]
+    .concat(lst.map(x => [x[0], x[1] || '', (Math.round(x[4] * 100) / 100).toFixed(2), (Math.round(x[5] * 100) / 100).toFixed(2), (Math.round(x[6] * 100) / 100).toFixed(2), x[3]].concat(fhv(x))));
   const csv = filas.map(r => r.map(escCsv).join(';')).join('\r\n');
   const blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
@@ -1867,11 +1870,13 @@ window.descargarCCPTodasCSV = async function(){
     if (cert <= 0 && comp <= 0 && dev <= 0) return 'Certificado en cero (anulada o rebajada)';
     return pend <= 1 ? 'Ejecutada al 100%' : 'Sin alerta';
   };
-  const HEAD = ['CCP', 'Órgano', 'Unidad orgánica', 'Sectorista', 'Glosa', 'Certificado (S/)', 'Comprometido (S/)', 'Devengado (S/)', 'Girado (S/)', 'Por comprometer (S/)', 'Por devengar (S/)', 'Meses sin avance (PCA)', 'Alerta'];
+  const conFH = !!(typeof CERTIF !== 'undefined' && CERTIF && CERTIF.fh_archivo);
+  const HEAD = ['CCP', 'Órgano', 'Unidad orgánica', 'Sectorista', 'Glosa', 'Certificado (S/)', 'Comprometido (S/)', 'Devengado (S/)', 'Girado (S/)', 'Por comprometer (S/)', 'Por devengar (S/)', conFH ? 'Meses sin avance (PCA + Formato H)' : 'Meses sin avance (PCA)'].concat(FH_HEAD, ['Alerta']);
   const filas = T.entries.map(([id, c]) => {
     const uo = c[8] || '', og = uo ? (T.ogDe.get(uo) || '') : '';
     return [isNaN(Number(id)) ? id : Number(id), og || 'Sin dato', uo || 'Sin dato', c[9] || 'Sin dato', c[4] || '',
-      r2(c[0]), r2(c[1]), r2(c[2]), r2(c[3]), r2(Math.max(0, c[0] - c[1])), r2(c[0] - c[2]), c[7] == null ? null : c[7], alertas(c)];
+      r2(c[0]), r2(c[1]), r2(c[2]), r2(c[3]), r2(Math.max(0, c[0] - c[1])), r2(c[0] - c[2]), c[7] == null ? null : c[7]]
+      .concat([0,1,2,3,4].map(i => (c[10] || [])[i] || ''), [alertas(c)]);
   }).sort((a,b) => b[10] - a[10] || (Number(a[0]) - Number(b[0])));   /* Por devengar de mayor a menor */
   const nombre = 'CCP_acumuladas_con_alertas_' + (window.__TABLERO__ ? window.__TABLERO__.FECHA_CORTE : '');
   const bajar = (blob, ext) => {
@@ -1886,14 +1891,14 @@ window.descargarCCPTodasCSV = async function(){
     /* respaldo: CSV sin formato */
     const escCsv = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
     const n = filas.length, sum = j => filas.reduce((s,f) => s + f[j], 0);
-    const tot = ['SUBTOTAL', '', '', '', n + ' CCP'].concat([5,6,7,8,9,10].map(j => r2(sum(j)).toFixed(2))).concat(['', '']);
+    const tot = ['SUBTOTAL', '', '', '', n + ' CCP'].concat([5,6,7,8,9,10].map(j => r2(sum(j)).toFixed(2))).concat(['', '', '', '', '', '', '']);
     const csv = [HEAD].concat(filas.map(f => f.map((v,j) => j >= 5 && j <= 10 ? v.toFixed(2) : v)), [tot]).map(r => r.map(escCsv).join(';')).join('\r\n');
     bajar(new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8;'}), '.csv');
     return;
   }
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('CCP', {views: [{state: 'frozen', ySplit: 1}]});
-  const ANCHO = [10, 12, 19, 20, 60, 18, 18, 18, 17, 18, 18, 16, 36];
+  const ANCHO = [10, 12, 19, 20, 60, 18, 18, 18, 17, 18, 18, 16, 14, 13, 42, 13, 16, 36];
   ws.columns = HEAD.map((h, i) => ({width: ANCHO[i]}));
   const hr = ws.addRow(HEAD);
   hr.height = 36;

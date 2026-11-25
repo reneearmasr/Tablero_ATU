@@ -1871,14 +1871,15 @@ window.descargarCCPTodasCSV = async function(){
     return pend <= 1 ? 'Ejecutada al 100%' : 'Sin alerta';
   };
   const conFH = !!(typeof CERTIF !== 'undefined' && CERTIF && CERTIF.fh_archivo);
-  const HEAD = ['CCP', 'Órgano', 'Unidad orgánica', 'Sec. func.', 'Sectorista', 'Glosa', 'Certificado (S/)', 'Comprometido (S/)', 'Devengado (S/)', 'Girado (S/)', 'Por comprometer (S/)', 'Por devengar (S/)', conFH ? 'Meses sin avance (PCA + Formato H)' : 'Meses sin avance (PCA)'].concat(FH_HEAD, ['Alerta']);
+  const HEAD = ['CCP', 'Fecha CCP', 'Órgano', 'Unidad orgánica', 'Sec. func.', 'Genérica', 'Sectorista', 'Glosa', 'Certificado (S/)', 'Comprometido (S/)', 'Devengado (S/)', 'Girado (S/)', 'Por comprometer (S/)', 'Por devengar (S/)', conFH ? 'Meses sin avance (PCA + Formato H)' : 'Meses sin avance (PCA)'].concat(FH_HEAD, ['Alerta']);
   const filas = T.entries.map(([id, c]) => {
     const uo = c[8] || '', og = uo ? (T.ogDe.get(uo) || '') : '';
     const sf = c[11] == null || c[11] === '' ? '' : (isNaN(Number(c[11])) ? String(c[11]) : Number(c[11]));
-    return [isNaN(Number(id)) ? id : Number(id), og || 'Sin dato', uo || 'Sin dato', sf, c[9] || 'Sin dato', c[4] || '',
+    /* c[12] = fecha de la CCP (dd/mm/aaaa), c[13] = genérica de gasto */
+    return [isNaN(Number(id)) ? id : Number(id), c[12] || '', og || 'Sin dato', uo || 'Sin dato', sf, c[13] || '', c[9] || 'Sin dato', c[4] || '',
       r2(c[0]), r2(c[1]), r2(c[2]), r2(c[3]), r2(Math.max(0, c[0] - c[1])), r2(c[0] - c[2]), c[7] == null ? null : c[7]]
       .concat([0,1,2,3,4].map(i => (c[10] || [])[i] || ''), [alertas(c)]);
-  }).sort((a,b) => b[11] - a[11] || (Number(a[0]) - Number(b[0])));   /* Por devengar de mayor a menor */
+  }).sort((a,b) => b[13] - a[13] || (Number(a[0]) - Number(b[0])));   /* Por devengar de mayor a menor */
   const nombre = 'CCP_acumuladas_con_alertas_' + (window.__TABLERO__ ? window.__TABLERO__.FECHA_CORTE : '');
   const bajar = (blob, ext) => {
     const url = URL.createObjectURL(blob), a = document.createElement('a');
@@ -1892,14 +1893,14 @@ window.descargarCCPTodasCSV = async function(){
     /* respaldo: CSV sin formato */
     const escCsv = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
     const n = filas.length, sum = j => filas.reduce((s,f) => s + f[j], 0);
-    const tot = ['SUBTOTAL', '', '', '', '', n + ' CCP'].concat([6,7,8,9,10,11].map(j => r2(sum(j)).toFixed(2))).concat(['', '', '', '', '', '', '']);
-    const csv = [HEAD].concat(filas.map(f => f.map((v,j) => j >= 6 && j <= 11 ? v.toFixed(2) : v)), [tot]).map(r => r.map(escCsv).join(';')).join('\r\n');
+    const tot = ['SUBTOTAL', '', '', '', '', '', '', n + ' CCP'].concat([8,9,10,11,12,13].map(j => r2(sum(j)).toFixed(2))).concat(['', '', '', '', '', '', '']);
+    const csv = [HEAD].concat(filas.map(f => f.map((v,j) => j >= 8 && j <= 13 ? v.toFixed(2) : v)), [tot]).map(r => r.map(escCsv).join(';')).join('\r\n');
     bajar(new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8;'}), '.csv');
     return;
   }
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('CCP', {views: [{state: 'frozen', ySplit: 1}]});
-  const ANCHO = [10, 12, 19, 10, 20, 60, 18, 18, 18, 17, 18, 18, 16, 14, 13, 42, 13, 16, 36];
+  const ANCHO = [10, 12, 12, 19, 10, 30, 20, 60, 18, 18, 18, 17, 18, 18, 16, 14, 13, 42, 13, 16, 36];
   ws.columns = HEAD.map((h, i) => ({width: ANCHO[i]}));
   const hr = ws.addRow(HEAD);
   hr.height = 36;
@@ -1908,15 +1909,17 @@ window.descargarCCPTodasCSV = async function(){
     c.font = {bold: true, color: {argb: 'FFFFFFFF'}};
     c.alignment = {vertical: 'middle', horizontal: 'center', wrapText: true};
   });
-  filas.forEach(f => ws.addRow(f));
+  const aFecha = s => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s || ''); return m ? new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])) : (s || ''); };
+  filas.forEach(f => ws.addRow(f.map((v, j) => j === 1 ? aFecha(v) : v)));
   const n = filas.length, ult = n + 1;
-  for (let j = 7; j <= 12; j++) ws.getColumn(j).numFmt = '#,##0.00';
+  ws.getColumn(2).numFmt = 'dd/mm/yyyy';
+  for (let j = 9; j <= 14; j++) ws.getColumn(j).numFmt = '#,##0.00';
   ws.autoFilter = {from: {row: 1, column: 1}, to: {row: ult, column: HEAD.length}};
   /* subtotal al final, fuera del rango del filtro */
   const st = ws.addRow(['SUBTOTAL']);
   const L = j => String.fromCharCode(64 + j);
-  st.getCell(6).value = {formula: 'SUBTOTAL(3,A2:A' + ult + ')&" CCP"', result: n + ' CCP'};
-  for (let j = 7; j <= 12; j++){
+  st.getCell(8).value = {formula: 'SUBTOTAL(3,A2:A' + ult + ')&" CCP"', result: n + ' CCP'};
+  for (let j = 9; j <= 14; j++){
     st.getCell(j).value = {formula: 'SUBTOTAL(9,' + L(j) + '2:' + L(j) + ult + ')', result: r2(filas.reduce((s,f) => s + f[j-1], 0))};
   }
   st.eachCell({includeEmpty: true}, (c, j) => {

@@ -412,11 +412,11 @@ td.name{white-space:normal;min-width:140px;max-width:260px;line-height:1.3}
 
 <script>
 (async function(){
-let DATA, HISTORIAL, FECHA_CORTE, HORA_CORTE, CERTIF, F12B_AUTO;
+let DATA, HISTORIAL, FECHA_CORTE, HORA_CORTE, CERTIF, F12B_AUTO, FEN;
 try {
   const resp = await fetch('datos.json', {cache: 'no-store'});
   const j = await resp.json();
-  DATA = j.data; HISTORIAL = j.historial; FECHA_CORTE = j.fecha_corte; HORA_CORTE = j.hora_corte; CERTIF = j.certificados || null;
+  DATA = j.data; HISTORIAL = j.historial; FECHA_CORTE = j.fecha_corte; HORA_CORTE = j.hora_corte; CERTIF = j.certificados || null; FEN = j.fen || null;
   F12B_AUTO = j.f12b || null;   /* 12-B consultado a diario en el SSI del MEF al generar datos.json */
 } catch (e) {
   document.body.innerHTML = '<div style="padding:60px 24px;font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;color:#16324F">' +
@@ -2108,11 +2108,39 @@ function pptxPrepData(){
   const subTot = subFilas.reduce((t,a) => { ['pim','ce','co','dv','dvMes','poMes','poRest'].forEach(k => t[k] += a[k]); return t; }, {pim:0, ce:0, co:0, dv:0, dvMes:0, poMes:0, poRest:0});
   const subsidios = {filas: subFilas, total: subTot};
 
+  /* FEN (Fenomeno El Nino): lineas del concepto "FEN" (secfun + clasificador) y las CCP que las certifican.
+     CCP exclusiva del FEN = requerimiento especifico; CCP compartida con otras metas = reserva de coordinacion UP - UA. */
+  let fen = null;
+  if (FEN && FEN.filas && FEN.filas.length){
+    const C = (CERTIF && CERTIF.ccp) || {};
+    const c2De = new Map(FEN.filas.map(f => [f[0] + '|' + f[1], f[2]]));
+    const esp = new Map(), res = new Map();
+    FEN.ccp.forEach(([n, sf, cl, ce, co, excl]) => {
+      const c = C[n];
+      const M = excl ? esp : res;
+      let a = M.get(n);
+      if (!a){
+        a = {n, ce:0, co:0, dv: excl && c ? c[2] : 0, glosa: c ? c[4] : '', fecha: c ? (c[12] || '') : '', conceptos: new Set()};
+        M.set(n, a);
+      }
+      a.ce += ce; a.co += co; a.conceptos.add(c2De.get(sf + '|' + cl) || '');
+    });
+    const etapa = a => a.dv >= a.ce - 0.5 && a.dv > 0 ? 'Devengado' : a.dv > 0 ? 'Devengado parcial' : a.co > 0.5 ? 'Comprometido' : 'Certificado';
+    const ORD = {'Certificado':0, 'Comprometido':1, 'Devengado parcial':2, 'Devengado':3};
+    const especificas = [...esp.values()].map(a => ({...a, etapa: etapa(a)})).sort((x,y) => ORD[x.etapa] - ORD[y.etapa] || y.ce - x.ce);
+    const reservas = [...res.values()].sort((x,y) => y.ce - x.ce);
+    const sum = (L, k) => L.reduce((t,a) => t + (a[k] || 0), 0);
+    fen = {pim: FEN.filas.reduce((t,f) => t + f[3], 0), dv: FEN.filas.reduce((t,f) => t + f[4], 0),
+           especificas, reservas, ceEsp: sum(especificas,'ce'), coEsp: sum(especificas,'co'), dvEsp: sum(especificas,'dv'), ceRes: sum(reservas,'ce'),
+           metas: [...new Set(FEN.filas.map(f => f[0]))]};
+    fen.ce = fen.ceEsp + fen.ceRes;
+  }
+
   return {
     fecha: FECHA_CORTE, hora: HORA_CORTE,
     total: {pia:t.pia, pim:t.pim, ce:t.ce, co:t.co, dv:t.dv, po_set:t.poi[LAST], dv_set:t.dvm[LAST], po_oct:t.poi[9], po_nov:t.poi[10], po_dic:t.poi[11]},
     por_tipo, por_fuente, por_generica, organo_resumen, infografia_generica, infografia_organo, cuellos, top_saldo, punto_atencion,
-    alertas_tipo, tipo_intervencion, ge_avance_rank, inversiones, trimestral_inv, proyeccion, locadores, subsidios,
+    alertas_tipo, tipo_intervencion, ge_avance_rank, inversiones, trimestral_inv, proyeccion, locadores, subsidios, fen,
   };
 }
 
@@ -2200,18 +2228,22 @@ async function buildDeckPPT(PptxGenJS, D){
       ["03","Ejecuci\u00f3n por gen\u00e9rica y concepto","D\u00f3nde est\u00e1 el saldo y c\u00f3mo avanza cada gen\u00e9rica",5],
       ["04","Ejecuci\u00f3n por tipo de obligaci\u00f3n contractual","Gesti\u00f3n ATU vs. obligaci\u00f3n contractual",6],
       ["05","Estado de los subsidios","Avance y etapa del gasto de cada subsidio (DU)",7],
-      ["06","Proyecci\u00f3n al cierre del a\u00f1o","Programaci\u00f3n "+mes_c+"\u2013diciembre y saldo pendiente",8],
-      ["07","Estado de las inversiones","Avance financiero de los proyectos activos",9],
-      ["08","Programaci\u00f3n de inversiones por trimestre","Programado (POI) vs. ejecutado",10],
     ];
-    const colW = 5.85, gap = 0.5, x0 = 0.55, y0 = 1.85, rh = 1.02;
+    const fenOff = D.fen ? 1 : 0;
+    if (D.fen) items.push(["06","Estado del FEN","Recursos del Fen\u00f3meno El Ni\u00f1o y sus CCP",8]);
+    items.push(
+      [D.fen?"07":"06","Proyecci\u00f3n al cierre del a\u00f1o","Programaci\u00f3n "+mes_c+"\u2013diciembre y saldo pendiente",8+fenOff],
+      [D.fen?"08":"07","Estado de las inversiones","Avance financiero de los proyectos activos",9+fenOff],
+      [D.fen?"09":"08","Programaci\u00f3n de inversiones por trimestre","Programado (POI) vs. ejecutado",10+fenOff]);
+    const perCol = Math.ceil(items.length/2);
+    const colW = 5.85, gap = 0.5, x0 = 0.55, y0 = 1.85, rh = perCol > 4 ? 0.84 : 1.02;
     items.forEach((it,i) => {
-      const col = i<4?0:1, row = i%4, x = x0+col*(colW+gap), y = y0+row*rh, link = {slide:it[3]};
+      const col = i<perCol?0:1, row = i%perCol, x = x0+col*(colW+gap), y = y0+row*rh, link = {slide:it[3]};
       card(s, x, y, colW, rh-0.14, {line:LINE2});
       s.addShape("roundRect", {x:x+0.16, y:y+(rh-0.14-0.5)/2, w:0.5, h:0.5, rectRadius:0.08, fill:{color:BLUE}, line:{type:"none"}, hyperlink:link});
       s.addText(it[0], {x:x+0.16, y:y+(rh-0.14-0.5)/2, w:0.5, h:0.5, fontFace:FONT, fontSize:16, bold:true, color:WHITE, align:"center", valign:"middle", isTextBox:true, margin:0, hyperlink:link});
       s.addText(it[1], {x:x+0.82, y:y+0.14, w:colW-1.0, h:0.32, fontFace:FONT, fontSize:13.5, bold:true, color:NAVY, isTextBox:true, margin:0, hyperlink:link});
-      s.addText(it[2], {x:x+0.82, y:y+0.46, w:colW-1.0, h:0.4, fontFace:FONT, fontSize:9.8, color:MUTED, isTextBox:true, margin:0, hyperlink:link});
+      s.addText(it[2], {x:x+0.82, y:y+(rh>0.9?0.46:0.4), w:colW-1.0, h:rh>0.9?0.4:0.28, fontFace:FONT, fontSize:9.8, color:MUTED, isTextBox:true, margin:0, hyperlink:link});
     });
     footerNote(s, "Fuente: SIAF-MPP, base al " + fechaTxt + " (" + D.hora + ").");
   }
@@ -2586,6 +2618,86 @@ async function buildDeckPPT(PptxGenJS, D){
     footerNote(s, "Fuente: SIAF-MPP, base al "+fechaTxt+" ("+D.hora+"). Subsidios = conceptos que empiezan con \"Subsidio\" en el Reporte de ejecución. Cifras en millones de soles.");
   }
 
+  // ===== 7c. Estado del FEN (Fenómeno El Niño) =====
+  if (D.fen) {
+    const F = D.fen;
+    const s = newSlide();
+    header(s, "UP | Estado del FEN (Fenómeno El Niño)");
+    subtitle(s, ["Seguimiento al "+fechaTxt, "Concepto FEN, metas "+F.metas.join(" y "), "Cifras en soles"]);
+    const nfS = v => (Math.round(v*100)/100).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+    const avF = div(F.dv, F.pim);
+    const y0 = 1.35, ch1 = 1.0, x0 = 0.45, kw = (PW-0.9-4*0.1)/5;
+    const kpis = [
+      ["PIM FEN", "S/ "+nf(F.pim), F.especificas.length+" CCP de requerimientos · "+F.reservas.length+" de reserva", NAVY],
+      ["Certificado", pct(div(F.ce, F.pim),1), "S/ "+nf(F.ce)+" en CCP", BLUE],
+      ["En requerimientos (CCP)", "S/ "+nf(F.ceEsp), pct(div(F.ceEsp, F.pim),1)+" del PIM FEN", BLUE],
+      ["En reserva UP - UA", "S/ "+nf(F.ceRes), "CCP de coordinación, sin requerimiento", AMBER],
+      ["Devengado", pct(avF,1), "S/ "+nf(F.dv)+" devengados", statusColor(avF)],
+    ];
+    kpis.forEach((k,i) => {
+      const x = x0+i*(kw+0.1);
+      card(s, x, y0, kw, ch1);
+      s.addShape("rect", {x, y:y0+0.1, w:0.05, h:ch1-0.2, fill:{color:k[3]}, line:{type:"none"}});
+      s.addText(k[0].toUpperCase(), {x:x+0.16, y:y0+0.1, w:kw-0.3, h:0.26, fontFace:FONT, fontSize:8, bold:true, color:MUTED, isTextBox:true, margin:0, charSpacing:0.3});
+      s.addText(k[1], {x:x+0.16, y:y0+0.36, w:kw-0.3, h:0.36, fontFace:FONT, fontSize:17, bold:true, color:k[3], isTextBox:true, margin:0, fit:"shrink"});
+      s.addText(k[2], {x:x+0.16, y:y0+0.72, w:kw-0.3, h:0.22, fontFace:FONT, fontSize:7.6, color:MUTED, isTextBox:true, margin:0});
+    });
+
+    const y2 = y0+ch1+0.14, ch2 = 5.88-y2, cw2 = 8.75;
+    card(s, x0, y2, cw2, ch2);
+    const pwT = pill(s, x0+0.16, y2+0.12, "¿En qué etapa está cada CCP del FEN?", {color:BLUE});
+    s.addText("Certificado y compromiso en las líneas FEN; devengado de la CCP", {x:x0+0.16+pwT+0.12, y:y2+0.12, w:cw2-pwT-0.45, h:0.3, fontFace:FONT, fontSize:8, color:MUTED, valign:"middle", isTextBox:true, margin:0});
+    const ETC = {"Devengado":GREEN, "Devengado parcial":GREEN, "Comprometido":BLUE, "Certificado":AMBER, "Reserva":MUTED};
+    const corta = (t, mx) => t.length > mx ? t.slice(0, mx-2).trim() + "…" : t;
+    const limpia = (g, mx) => {
+      let t = (g||"").replace(/^CCMN-\d+:\s*/i, "").replace(/\s+/g, " ").trim().toLowerCase();
+      t = t.replace(/\bcosac i\b/g, "COSAC I").replace(/\bcosac\b/g, "COSAC").replace(/\bmatellini\b/g, "Matellini").replace(/\bnaranjal\b/g, "Naranjal").replace(/\bup\b/g, "UP").replace(/\bua\b/g, "UA").replace(/\bsstr\b/g, "SSTR").replace(/\bhdpe\b/g, "HDPE").replace(/\batu\b/g, "ATU");
+      t = t.charAt(0).toUpperCase() + t.slice(1);
+      return corta(t, mx || 66);
+    };
+    const cel = (t, o) => ({text:t, options:Object.assign({fontFace:FONT, fontSize:7.4, valign:"middle", color:INK}, o||{})});
+    const AL = ["center","left","center","right","right","right","center"];
+    const rows = [["CCP","Requerimiento","Fecha CCP","Certificado","Comprometido","Devengado","Etapa"].map((h,i) => cel(h, {bold:true, color:WHITE, fill:{color:NAVY}, fontSize:7.8, align:AL[i]}))];
+    F.especificas.forEach(a => rows.push([
+      cel(a.n, {bold:true, color:NAVY, align:"center"}), cel(limpia(a.glosa)), cel(a.fecha, {align:"center"}),
+      cel(nfS(a.ce), {align:"right"}), cel(nfS(a.co), {align:"right"}), cel(nfS(a.dv), {align:"right"}),
+      cel(a.etapa, {bold:true, color:ETC[a.etapa], align:"center"})]));
+    const RS = {color:MUTED, fill:{color:"EEF2F7"}};
+    F.reservas.forEach(a => rows.push([
+      cel(a.n, Object.assign({bold:true, align:"center"}, RS)),
+      cel(corta(limpia(a.glosa, 200)+" — "+[...a.conceptos].filter(Boolean).join(", ").toLowerCase(), 66), Object.assign({italic:true}, RS)),
+      cel(a.fecha, Object.assign({align:"center"}, RS)), cel(nfS(a.ce), Object.assign({align:"right"}, RS)),
+      cel("—", Object.assign({align:"right"}, RS)), cel("—", Object.assign({align:"right"}, RS)),
+      cel("Reserva", Object.assign({bold:true, align:"center"}, RS))]));
+    rows.push(["Total","","",nfS(F.ce),nfS(F.coEsp),nfS(F.dvEsp),""].map((v,i) => cel(v, {bold:true, color:WHITE, fill:{color:NAVY}, align:AL[i]})));
+    const tw = [0.55, 3.6, 0.72, 0.88, 0.92, 0.85, 0.85];
+    const rH = Math.min(0.27, (ch2-0.62)/rows.length);
+    s.addTable(rows, {x:x0+0.14, y:y2+0.52, w:tw.reduce((t,v)=>t+v,0), colW:tw, rowH:rH, border:{type:"solid", pt:0.5, color:LINE}, margin:[0.02,0.05,0.02,0.05], autoPage:false});
+
+    const x3 = x0+cw2+0.14, cw3 = PW-0.45-x3;
+    card(s, x3, y2, cw3, ch2);
+    pill(s, x3+0.16, y2+0.12, "Lectura", {color:RED});
+    const sinComp = F.especificas.filter(a => a.etapa === "Certificado");
+    const porDev = F.especificas.filter(a => a.etapa === "Comprometido" || a.etapa === "Devengado parcial");
+    const devs = F.especificas.filter(a => a.dv > 0);
+    const fk = f => f ? f.split("/").reverse().join("") : "";
+    const ult = [...F.especificas].sort((a,b) => fk(b.fecha).localeCompare(fk(a.fecha)))[0];
+    const conc = [...new Set(F.reservas.flatMap(a => [...a.conceptos]))].filter(Boolean).map(t => t.toLowerCase());
+    const runs = [
+      {text:"● ", options:{color:statusColor(avF), bold:true}}, {text:"Devengado "+pct(avF,1)+" del PIM FEN", options:{bold:true, color:NAVY}},
+      {text:" (S/ "+nf(F.dv)+")"+(devs.length ? ", con las CCP "+devs.map(a => a.n).join(", ")+"." : ".")+"\n\n", options:{color:INK}},
+    ];
+    if (F.reservas.length) runs.push(
+      {text:"● ", options:{color:AMBER, bold:true}}, {text:"S/ "+nf(F.ceRes)+" en reserva", options:{bold:true, color:NAVY}},
+      {text:" (CCP "+F.reservas.map(a => a.n).join(", ")+"), aún sin requerimiento específico"+(conc.length ? ": "+conc.join(", ") : "")+".\n\n", options:{color:INK}});
+    runs.push(
+      {text:"● ", options:{color:BLUE, bold:true}}, {text:"S/ "+nf(porDev.reduce((t,a) => t+Math.max(0,a.co-a.dv),0))+" comprometido por devengar", options:{bold:true, color:NAVY}},
+      {text:" en "+porDev.length+" CCP"+(sinComp.length ? "; "+sinComp.length+" CCP solo certificadas (S/ "+nf(sinComp.reduce((t,a) => t+a.ce,0))+")." : ".")+"\n\n", options:{color:INK}});
+    if (ult) runs.push({text:"● ", options:{color:MUTED, bold:true}}, {text:"Última CCP: "+ult.n, options:{bold:true, color:NAVY}},
+      {text:" del "+ult.fecha+": "+limpia(ult.glosa, 130)+".", options:{color:INK}});
+    s.addText(runs, {x:x3+0.16, y:y2+0.55, w:cw3-0.32, h:ch2-0.7, fontFace:FONT, fontSize:9, valign:"top", isTextBox:true, margin:0, lineSpacing:11.5});
+    footerNote(s, "Fuente: SIAF-MPP, base al "+fechaTxt+" ("+D.hora+"), concepto FEN del Reporte de ejecución; CCP según el PCA por secfun y clasificador. Reserva = CCP de coordinación UP - UA compartida con otras metas.");
+  }
   // ===== 8. Proyección al cierre del año =====
   {
     const s = newSlide();
